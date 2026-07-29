@@ -227,7 +227,7 @@ class WSPF_B:
             # --- WSPF-B 固有: ρ 監視 (R1-8) ---
             "rho": [],               # 各ステップ・各粒子の ρ^(i) (shape (N,))
             "rho_clip_count": [],    # ρ >= RHO_CLIP(0.999) に到達した粒子数
-            "logcorr_clip_count": [],  # log_correction クリップ発動粒子数
+            "logcorr_nonfinite_count": [],  # log_correction 非有限ガード発動数(通常0)
             # --- 計算コスト計測 (R1-11) ---
             "t_step": [],
             "t_grad": [],            # per-sample 勾配評価の時間 [s]
@@ -288,7 +288,7 @@ class WSPF_B:
         self.particles = self.particles - self.eta * g_hat + epsilon
 
         # 3) 補正項 (Method B)
-        log_correction, rho, logcorr_clip_count = compute_correction_method_b(
+        log_correction, rho, logcorr_nonfinite_count = compute_correction_method_b(
             epsilon, self.eta, s_bar, self.sigma_sys_sq, self.param_dim
         )
         _t_corr = time.perf_counter()
@@ -345,7 +345,7 @@ class WSPF_B:
         self.history["resampled"].append(resampled)
         self.history["rho"].append(rho.copy())
         self.history["rho_clip_count"].append(rho_clip_count)
-        self.history["logcorr_clip_count"].append(logcorr_clip_count)
+        self.history["logcorr_nonfinite_count"].append(logcorr_nonfinite_count)
         # 計算コスト (R1-11)
         self.history["t_grad"].append(_t_grad - _t0)
         self.history["t_correction"].append(_t_corr - _t_grad)

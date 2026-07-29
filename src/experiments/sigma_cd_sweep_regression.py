@@ -75,7 +75,7 @@ def run_one(args):
             "rho_mean": float(rho_eval.mean()),
             "rho_max": float(rho_eval.max()),
             "rho_clip_count": int(np.asarray(h["rho_clip_count"])[EVAL_START:].sum()),
-            "logcorr_clip_count": int(np.asarray(h["logcorr_clip_count"])[EVAL_START:].sum()),
+            "logcorr_nonfinite_count": int(np.asarray(h["logcorr_nonfinite_count"])[EVAL_START:].sum()),
             "n_particle_steps": int(rho_eval.size),
         }
     return out
@@ -105,7 +105,7 @@ def main():
     # 集計コンテナ
     mse_by_sc = {sc: {m: [] for m in METHODS} for sc in SIGMA_CD_GRID}
     rho_by_sc = {sc: {m: {"rho_mean": [], "rho_max": [],
-                          "rho_clip_count": [], "logcorr_clip_count": [],
+                          "rho_clip_count": [], "logcorr_nonfinite_count": [],
                           "n_particle_steps": []}
                       for m in RHO_METHODS} for sc in SIGMA_CD_GRID}
 
@@ -151,7 +151,7 @@ def main():
             rm = float(np.mean(rho_by_sc[sc][m]["rho_mean"]))
             rx = float(np.max(rho_by_sc[sc][m]["rho_max"]))
             clip = int(np.sum(rho_by_sc[sc][m]["rho_clip_count"]))
-            lclip = int(np.sum(rho_by_sc[sc][m]["logcorr_clip_count"]))
+            lclip = int(np.sum(rho_by_sc[sc][m]["logcorr_nonfinite_count"]))
             nps = int(np.sum(rho_by_sc[sc][m]["n_particle_steps"]))
             frac = 100.0 * clip / nps if nps else 0.0
             rho_curve[m]["rho_mean"].append(rm)

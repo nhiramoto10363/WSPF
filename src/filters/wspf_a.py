@@ -80,8 +80,8 @@ def compute_correction_method_a(epsilon, xi_hat, deviations, eta,
         補正項 log R̂_A^(i)
     rho : ndarray, shape (N,)
         スカラー相当の signal-to-drift 比 (診断用): η²s̄/(η²s̄+σ²), s̄=tr(Σ̂)/d
-    logcorr_clip_count : int
-        数値バックストップのクランプ発動粒子数
+    logcorr_nonfinite_count : int
+        log_correction が非有限になり中立値 0 でガードした粒子数(通常 0)
     cond_M : ndarray, shape (N,)
         各粒子の M = I_B + c⁻¹αWW^T の条件数(数値安定性の監視用)
     """
@@ -236,7 +236,7 @@ class WSPF_A:
             # --- WSPF-A 固有: ρ 監視 (R1-8) ---
             "rho": [],
             "rho_clip_count": [],
-            "logcorr_clip_count": [],
+            "logcorr_nonfinite_count": [],
             # --- WSPF-A 固有: 行列反転の条件数監視 (R1-10) ---
             "cond_M_mean": [],
             "cond_M_max": [],
@@ -311,7 +311,7 @@ class WSPF_A:
         self.particles = self.particles - self.eta * g_hat + epsilon
 
         # 5) 補正項 (Method A, 行列版; ここに Woodbury/Cholesky/logdet が入る)
-        (log_correction, rho, logcorr_clip_count,
+        (log_correction, rho, logcorr_nonfinite_count,
          cond_M) = compute_correction_method_a(
             epsilon, xi_hat, deviations, self.eta,
             self.sigma_sys_sq, self.param_dim,
@@ -373,7 +373,7 @@ class WSPF_A:
         self.history["resampled"].append(resampled)
         self.history["rho"].append(rho.copy())
         self.history["rho_clip_count"].append(rho_clip_count)
-        self.history["logcorr_clip_count"].append(logcorr_clip_count)
+        self.history["logcorr_nonfinite_count"].append(logcorr_nonfinite_count)
         self.history["cond_M_mean"].append(float(np.mean(cond_M)))
         self.history["cond_M_max"].append(float(np.max(cond_M)))
         # 計算コスト (R1-11)

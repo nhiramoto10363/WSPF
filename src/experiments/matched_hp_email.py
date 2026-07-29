@@ -42,22 +42,28 @@ OUTPUT_DIR = os.path.join(
 def build_matched_hp():
     """PF 最良構成を共通ハイパラとして各粒子数ぶん構築する。"""
     gs = EB.load_grid_search_params()
+    # 厳格化(無言フォールバック廃止): 未実行・N 欠損・旧/欠損キーは明示的に失敗。
+    if gs is None:
+        raise RuntimeError(
+            "email グリッド結果が見つかりません。先に "
+            "grid_search_email.py を実行してください。")
     out = {}
     for n_p in EB.N_PARTICLES_LIST:
-        if gs is not None and str(n_p) in gs:
-            entry = gs[str(n_p)]
-            best_pf = entry["best_pf"]
-            best_a = entry.get("best_wspf_a", None)
-            beta = best_a["beta"] if best_a and "beta" in best_a else EB.DEFAULT_BETA
-            src = "grid best_pf"
-        else:
-            best_pf = {"eta": EB.DEFAULT_ETA, "sigma_sys": EB.DEFAULT_SIGMA_SYS,
-                       "prior_std": EB.DEFAULT_PRIOR_STD}
-            beta = EB.DEFAULT_BETA
-            src = "default (no grid)"
+        if str(n_p) not in gs:
+            raise KeyError(f"email グリッド JSON に N={n_p} がありません。")
+        entry = gs[str(n_p)]
+        for k in ("best_pf", "best_wspf_a"):
+            if k not in entry:
+                raise KeyError(
+                    f"email グリッド JSON に '{k}' がありません(旧キーの可能性)。"
+                    "グリッドを再生成してください。")
+        if "beta" not in entry["best_wspf_a"]:
+            raise KeyError("best_wspf_a に 'beta' がありません。")
+        best_pf = entry["best_pf"]
+        beta = entry["best_wspf_a"]["beta"]
         matched = {"eta": best_pf["eta"], "sigma_sys": best_pf["sigma_sys"],
                    "prior_std": best_pf["prior_std"]}
-        out[n_p] = (matched, beta, src)
+        out[n_p] = (matched, beta, "grid best_pf")
     return out
 
 
