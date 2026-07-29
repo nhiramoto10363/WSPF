@@ -136,10 +136,13 @@ class ParticleFilter:
         )
         _t_corr = time.perf_counter()
 
-        # 2) 尤度による重み更新
+        # 2) 尤度による重み更新（SIS の逐次累積: 前ステップの重みを保持）
+        #    リサンプリングしないステップの重み情報を捨てないよう、WSPF と
+        #    同じく log w_t = log w_{t-1} + log p(B_t | θ_t) を累積する。
         ll = loglik_fn(self.particles, X, y)
         _t_ll = time.perf_counter()
-        self.weights = normalize_logweights(ll)
+        log_prev = np.log(np.maximum(self.weights, 1e-300))
+        self.weights = normalize_logweights(log_prev + ll)
 
         # 3) 推定値の計算（リサンプリング前）
         mean = (self.weights[:, None] * self.particles).sum(axis=0)

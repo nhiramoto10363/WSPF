@@ -285,17 +285,11 @@ def run_single(seed, n_particles, best_pf, best_wspf_b, best_wspf_a,
         theta_sgd = theta_sgd - sgd_eta * g
         mu_sgd = theta_sgd.copy()
 
-        # PF
-        pf.step(Xt, yt, clipped_grad_fn, loglik_fn)
-        mu_pf = (pf.weights[:, None] * pf.particles).sum(axis=0)
-
-        # WSPF-B
-        wspf_b.step(Xt, yt, ps_grad_fn, loglik_fn)
-        mu_wspf_b = (wspf_b.weights[:, None] * wspf_b.particles).sum(axis=0)
-
-        # WSPF-A
-        wspf_a.step(Xt, yt, ps_grad_fn, loglik_fn)
-        mu_wspf_a = (wspf_a.weights[:, None] * wspf_a.particles).sum(axis=0)
+        # PF / WSPF: step() の返り値 = リサンプリング前の重み付き平均を使う
+        # (論文の点推定定義に一致。リサンプリング後の一様重み再計算は不可)
+        mu_pf = pf.step(Xt, yt, clipped_grad_fn, loglik_fn)
+        mu_wspf_b = wspf_b.step(Xt, yt, ps_grad_fn, loglik_fn)
+        mu_wspf_a = wspf_a.step(Xt, yt, ps_grad_fn, loglik_fn)
 
         mse["SGD"].append(compute_test_mse(model, mu_sgd, Xte, yte))
         mse["PF"].append(compute_test_mse(model, mu_pf, Xte, yte))

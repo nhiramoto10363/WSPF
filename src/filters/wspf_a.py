@@ -107,10 +107,9 @@ def compute_correction_method_a(epsilon, xi_hat, deviations, eta,
         M[:, diag, diag] += 1e-8
         L = np.linalg.cholesky(M)
 
-    # log|M| = 2 Σ log diag(L)
-    logdet_M = 2.0 * np.sum(
-        np.log(np.diagonal(L, axis1=1, axis2=2)), axis=1
-    )  # (N,)
+    # log|M| = 2 Σ log diag(L)。対角は条件数近似にも再利用する。
+    Ldiag = np.diagonal(L, axis1=1, axis2=2)  # (N, B)
+    logdet_M = 2.0 * np.sum(np.log(Ldiag), axis=1)  # (N,)
 
     # M⁻¹ p を Cholesky 経由で解く
     z = np.linalg.solve(M, p[:, :, None])[:, :, 0]  # (N, B)
@@ -130,15 +129,18 @@ def compute_correction_method_a(epsilon, xi_hat, deviations, eta,
     s_bar = np.sum(deviations ** 2, axis=(1, 2)) / (B * (B - 1) * d)
     rho = eta ** 2 * s_bar / (eta ** 2 * s_bar + c)
 
-    # 条件数監視 (B×B なので安価)
-    cond_M = np.linalg.cond(M)  # (N,)
+    # 条件数の安価な近似(Cholesky 対角比の2乗)。厳密な 2-ノルム条件数の
+    # 代理だが、既に計算した L の対角を使うため追加コストがほぼ無く、
+    # R1-11 の計時に np.linalg.cond の SVD コストを混入させない。
+    cond_M = (Ldiag.max(axis=1) /
+              np.maximum(Ldiag.min(axis=1), 1e-300)) ** 2  # (N,)
 
-    # 数値安定バックストップ
-    max_abs = 0.5 * d
-    log_correction = np.clip(log_correction_raw, -max_abs, max_abs)
-    logcorr_clip_count = int(np.sum(np.abs(log_correction_raw) > max_abs))
+    # ±d/2 クランプは撤廃(wspf_b と同様)。非有限値のみ中立値 0 でガード。
+    finite = np.isfinite(log_correction_raw)
+    log_correction = np.where(finite, log_correction_raw, 0.0)
+    nonfinite_count = int(np.sum(~finite))
 
-    return log_correction, rho, logcorr_clip_count, cond_M
+    return log_correction, rho, nonfinite_count, cond_M
 
 
 # ================================================================

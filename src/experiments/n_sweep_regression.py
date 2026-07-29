@@ -146,9 +146,9 @@ def main():
             ys = [ (transform(N, m) if transform else scale*mean(N, key, m))
                    for N in N_GRID]
             plt.plot(Ns, ys, "o-", color=colors[m], label=m, linewidth=1.6)
-        plt.xscale("log", base=2)
+        plt.xscale("log")
         if logy:
-            plt.yscale("log", base=2)
+            plt.yscale("log")
         plt.xticks(Ns, [str(n) for n in N_GRID])
         plt.xlabel("number of particles N")
         plt.ylabel(ylabel); plt.title(title)

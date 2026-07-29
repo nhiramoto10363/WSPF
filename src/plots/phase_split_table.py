@@ -32,7 +32,13 @@ INPUT_DIR = os.path.join(_PROJECT_ROOT, "outputs", "email_binary")
 OUTPUT_DIR = INPUT_DIR
 
 BATCH_SIZE = 16
-SWITCHES = [300, 600, 900, 1200]   # コンセプトドリフト点（サンプル位置）
+REPORT_START = 600                 # リーク除去後の報告区間開始(期3-5)
+# コンセプトドリフト点(サンプル位置)。リーク除去後は報告区間(≥600)に入る
+# スイッチのみ有効。300 は warm-up、600 は報告区間の開始点(直前の安定期が
+# 報告区間外)なので除外し、実質のスイッチイベントは 900, 1200 の 2 点。
+# 論文の「four switch events で平均」は「two events」に要修正(Table 6 / Fig 5)。
+ALL_SWITCHES = [300, 600, 900, 1200]
+SWITCHES = [sw for sw in ALL_SWITCHES if sw > REPORT_START]  # -> [900, 1200]
 POST_SWITCH_STEPS = 5              # スイッチ後を「遷移期」とみなすステップ数
 
 # npz のキー接頭辞 -> 論文での手法名

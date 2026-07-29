@@ -251,18 +251,26 @@ def run_single_oracle(seed, n_particles, hp):
 
 
 def _load_hp(n_p):
-    """グリッド結果から各メソッドの best HP を取得(なければ default)。"""
+    """グリッド結果から各メソッドの best HP を厳格に取得する。
+
+    無言フォールバック(欠損キーに PF 構成を代入)は誤設定の温床なので廃止。
+    グリッド未実行・旧キー・キー欠損の場合は明示的に失敗させる。
+    """
     grid = load_grid_search_params()
-    if grid is not None and str(n_p) in grid:
-        e = grid[str(n_p)]
-        bp = e["best_pf"]
-        bb = e.get("best_wspf_b", bp)
-        ba = e.get("best_wspf_a", {**bp, "beta": DEFAULT_BETA})
-    else:
-        base = {"eta": DEFAULT_ETA, "sigma_sys": DEFAULT_SIGMA_SYS,
-                "prior_std": DEFAULT_PRIOR_STD}
-        bp, bb, ba = dict(base), dict(base), {**base, "beta": DEFAULT_BETA}
-    return {"pf": bp, "wspf_b": bb, "wspf_a": ba}
+    if grid is None or str(n_p) not in grid:
+        raise RuntimeError(
+            f"グリッド結果が見つかりません(N={n_p})。先に "
+            "grid_search_regression_regime_switch.py を実行してください。")
+    e = grid[str(n_p)]
+    for k in ("best_pf", "best_wspf_b", "best_wspf_a"):
+        if k not in e:
+            raise KeyError(
+                f"グリッド JSON に '{k}' がありません(旧キー best_cpf 等の可能性)。"
+                "グリッドを再生成してください。")
+    if "beta" not in e["best_wspf_a"]:
+        raise KeyError("best_wspf_a に 'beta' がありません。")
+    return {"pf": e["best_pf"], "wspf_b": e["best_wspf_b"],
+            "wspf_a": e["best_wspf_a"]}
 
 
 def main():

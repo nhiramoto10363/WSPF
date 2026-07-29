@@ -48,21 +48,26 @@ OUTPUT_DIR = os.path.join(
 
 
 def load_hp(n_p):
-    """グリッド結果から各メソッド best HP を取得(旧キー/欠損はフォールバック)。"""
+    """グリッド結果から各メソッド best HP を厳格に取得する。
+
+    無言フォールバック(旧キー best_cpf への回避や PF 構成の代入)は誤設定の
+    温床なので廃止。グリッド未実行・旧キー・キー欠損は明示的に失敗させる。
+    """
     gs = EB.load_grid_search_params()
-    defaults_pf = {"eta": EB.DEFAULT_ETA, "sigma_sys": EB.DEFAULT_SIGMA_SYS,
-                   "prior_std": EB.DEFAULT_PRIOR_STD}
-    e = gs.get(str(n_p)) if gs else None
-    if e:
-        bp = e.get("best_pf", defaults_pf)
-        bb = e.get("best_wspf_b") or e.get("best_cpf") or dict(bp)
-        ba = e.get("best_wspf_a") or e.get("best_cpf_a") or dict(bp)
-        src = "grid"
-    else:
-        bp, bb, ba, src = dict(defaults_pf), dict(defaults_pf), dict(defaults_pf), "default"
+    if gs is None or str(n_p) not in gs:
+        raise RuntimeError(
+            f"email グリッド結果が見つかりません(N={n_p})。先に "
+            "grid_search_email.py を実行してください。")
+    e = gs[str(n_p)]
+    for k in ("best_pf", "best_wspf_b", "best_wspf_a"):
+        if k not in e:
+            raise KeyError(
+                f"email グリッド JSON に '{k}' がありません(旧キー best_cpf 等の"
+                "可能性)。グリッドを再生成してください。")
+    ba = e["best_wspf_a"]
     if "beta" not in ba:
-        ba = {**ba, "beta": EB.DEFAULT_BETA}
-    return bp, bb, ba, src
+        raise KeyError("best_wspf_a に 'beta' がありません。")
+    return e["best_pf"], e["best_wspf_b"], ba, "grid"
 
 
 def _seed_job(args):

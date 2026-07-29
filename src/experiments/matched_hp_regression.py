@@ -47,27 +47,35 @@ OUTPUT_DIR = os.path.join(
 
 
 def build_matched_hp():
-    """PF 最良構成を共通ハイパラとして各粒子数ぶん構築する。"""
+    """PF 最良構成を共通ハイパラとして各粒子数ぶん厳格に構築する。
+
+    グリッド未実行・キー欠損時は明示的に失敗させる(無言フォールバック廃止)。
+    """
     grid = load_grid_search_params()
+    if grid is None:
+        raise RuntimeError(
+            "グリッド結果が見つかりません。先に "
+            "grid_search_regression_regime_switch.py を実行してください。")
     matched_by_n = {}
     for n_p in N_PARTICLES_LIST:
-        if grid is not None and str(n_p) in grid:
-            entry = grid[str(n_p)]
-            best_pf = entry["best_pf"]
-            best_a = entry.get("best_wspf_a", None)
-            beta = best_a["beta"] if best_a and "beta" in best_a else DEFAULT_BETA
-            src = "grid best_pf"
-        else:
-            best_pf = {"eta": DEFAULT_ETA, "sigma_sys": DEFAULT_SIGMA_SYS,
-                       "prior_std": DEFAULT_PRIOR_STD}
-            beta = DEFAULT_BETA
-            src = "default (no grid)"
+        if str(n_p) not in grid:
+            raise KeyError(f"グリッド JSON に N={n_p} がありません。")
+        entry = grid[str(n_p)]
+        for k in ("best_pf", "best_wspf_a"):
+            if k not in entry:
+                raise KeyError(
+                    f"グリッド JSON に '{k}' がありません(旧キーの可能性)。"
+                    "グリッドを再生成してください。")
+        if "beta" not in entry["best_wspf_a"]:
+            raise KeyError("best_wspf_a に 'beta' がありません。")
+        best_pf = entry["best_pf"]
+        beta = entry["best_wspf_a"]["beta"]
         matched = {
             "eta": best_pf["eta"],
             "sigma_sys": best_pf["sigma_sys"],
             "prior_std": best_pf["prior_std"],
         }
-        matched_by_n[n_p] = (matched, beta, src)
+        matched_by_n[n_p] = (matched, beta, "grid best_pf")
     return matched_by_n
 
 

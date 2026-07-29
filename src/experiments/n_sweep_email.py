@@ -142,12 +142,12 @@ def main():
         a2.plot(Ns, [1e3*mean(N, "t_step", m) for N in N_GRID], "o-",
                 color=colors[m], label=m, linewidth=1.6)
     for a in (a1, a2):
-        a.set_xscale("log", base=2); a.set_xticks(Ns)
+        a.set_xscale("log"); a.set_xticks(Ns)
         a.set_xticklabels([str(n) for n in N_GRID])
         a.set_xlabel("number of particles N"); a.grid(True, alpha=0.3, which="both")
         a.legend()
     a1.set_ylabel("F1 (report region)"); a1.set_title("F1 vs N (Email)")
-    a2.set_yscale("log", base=2)
+    a2.set_yscale("log")
     a2.set_ylabel("time per update [ms]"); a2.set_title("Wall-clock per update vs N")
     plt.tight_layout()
     png = os.path.join(OUTPUT_DIR, "n_sweep_email.png")

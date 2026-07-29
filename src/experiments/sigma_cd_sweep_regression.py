@@ -141,8 +141,10 @@ def main():
         emit(row)
 
     emit(f"\n{'='*72}\n  ρ 分布とクリップ頻度 vs σ_cd (WSPF, eval-region)\n{'='*72}")
+    # ρ≥.999(ρクリップ到達数)と ρclip%(その割合)を隣接させ、
+    # log_correction 非有限ガード数(nonfinite)は別列にして誤読を防ぐ。
     emit(f"  {'σ_cd':>7s} {'method':<8s} {'ρ_mean':>8s} {'ρ_max':>8s} "
-         f"{'ρ≥.999':>9s} {'logcorr_clip':>13s} {'clip%':>7s}")
+         f"{'ρ≥.999':>9s} {'ρclip%':>8s} {'nonfinite':>10s}")
     rho_curve = {m: {"rho_mean": [], "rho_clip_frac": []} for m in RHO_METHODS}
     for sc in SIGMA_CD_GRID:
         for m in RHO_METHODS:
@@ -155,7 +157,7 @@ def main():
             rho_curve[m]["rho_mean"].append(rm)
             rho_curve[m]["rho_clip_frac"].append(frac)
             emit(f"  {sc:>7.3f} {m:<8s} {rm:>8.4f} {rx:>8.4f} "
-                 f"{clip:>9d} {lclip:>13d} {frac:>6.2f}%")
+                 f"{clip:>9d} {frac:>7.2f}% {lclip:>10d}")
 
     # ---- CSV ----
     csv_path = os.path.join(OUTPUT_DIR, "sigma_cd_sweep_regression.csv")

@@ -133,13 +133,15 @@ def compute_correction_method_b(epsilon, eta, s_bar, sigma_sys_sq, d):
 
     log_correction_raw = term1 + term2 + term3
 
-    # 数値安定性の追加バックストップ: d に比例した上限でクランプ
-    max_abs = 0.5 * d
-    log_correction = np.clip(log_correction_raw, -max_abs, max_abs)
-    # クリップが実際に発動した粒子数（R1-8 監視用）
-    logcorr_clip_count = int(np.sum(np.abs(log_correction_raw) > max_abs))
+    # 論文 Alg.2 に存在しない ±d/2 クランプは撤廃(補正を非線形に歪め、
+    # 低 σcd 域では恒常的に発動して手法を実質置換していたため)。
+    # ρ クリップ(0.999)で volume penalty は有限に抑えられるので、
+    # ここでは非有限値のみを中立値 0 でガードする。
+    finite = np.isfinite(log_correction_raw)
+    log_correction = np.where(finite, log_correction_raw, 0.0)
+    nonfinite_count = int(np.sum(~finite))  # 非有限ガード発動数(通常 0)
 
-    return log_correction, rho, logcorr_clip_count
+    return log_correction, rho, nonfinite_count
 
 
 # ================================================================

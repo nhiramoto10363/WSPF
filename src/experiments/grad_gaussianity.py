@@ -261,7 +261,7 @@ def plot_mse_vs_B(curve, path):
     for m in METHODS:
         plt.plot(BATCH_SIZES, curve[m], "o-", color=colors[m],
                  label=m, linewidth=1.6)
-    plt.xscale("log", base=2)
+    plt.xscale("log")
     plt.xticks(BATCH_SIZES, [str(b) for b in BATCH_SIZES])
     plt.xlabel("batch size B")
     plt.ylabel("Test MSE (eval region)")
