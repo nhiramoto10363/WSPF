@@ -47,7 +47,7 @@ OUTPUT_DIR = os.path.join(
 
 def _job(args):
     """1 (N, seed) ジョブ。報告区間で集計した軽量値を返す。"""
-    N, seed, bp, bb, ba = args
+    N, seed, bp, bb, ba, best_sgd = args
     loader = EmailDataLoader(EB.DATA_PATH, n_components=EB.PCA_DIM,
                              seed=EB.SEED, pca_fit_end=EB.PCA_FIT_END)
     model = NeuralNetModel(input_dim=loader.input_dim, hidden_dim=EB.HIDDEN_DIM,
@@ -65,7 +65,7 @@ def _job(args):
         n_particles=N, model=model, loader=loader, grad_fn=grad_fn,
         loglik_fn=loglik_fn, ps_grad_fn=ps_grad_fn,
         best_pf=bp, best_wspf_b=bb, best_wspf_a=ba,
-        sgd_eta=bp["eta"], sgd_prior=bp["prior_std"], param_dim=param_dim,
+        sgd_eta=best_sgd["eta"], sgd_prior=best_sgd["prior_std"], param_dim=param_dim,
         seed=seed)
 
     by_m = {r["method"]: r for r in result_rows}
@@ -85,7 +85,7 @@ def _job(args):
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    bp, bb, ba, src = load_hp(100)
+    bp, bb, ba, best_sgd, src = load_hp(100)
     lines = []
     def emit(s=""):
         print(s); lines.append(s)
@@ -97,7 +97,7 @@ def main():
     emit(f"  (leak-free: PCA fit 期1-2, report 期3-5)")
     emit("=" * 72)
 
-    jobs = [(N, s, bp, bb, ba) for N in N_GRID for s in SEEDS]
+    jobs = [(N, s, bp, bb, ba, best_sgd) for N in N_GRID for s in SEEDS]
     agg = {N: {k: {m: [] for m in PARTICLE_METHODS}
                for k in ("f1", "ess", "ess_ratio", "resample", "t_step")}
            for N in N_GRID}

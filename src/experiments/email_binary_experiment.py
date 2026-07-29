@@ -341,7 +341,7 @@ def save_result_tables(output_dir, all_results, methods, hp_by_n):
         fp.write("(best hyperparameters per particle count)\n")
         fp.write("=" * 70 + "\n\n")
         for n_p in n_particles_list:
-            best_pf, best_wspf_b, best_wspf_a = hp_by_n[n_p]
+            best_pf, best_wspf_b, best_wspf_a, _best_sgd = hp_by_n[n_p]
             fp.write(f"N_Particles = {n_p}\n")
             fp.write(
                 f"  PF:    eta={best_pf['eta']}, "
@@ -604,64 +604,45 @@ def main():
     # -------- ハイパーパラメータ読み込み --------
     gs_data = load_grid_search_params()
 
+    # 厳格化(無言フォールバック廃止)+ SGD 独自 η(best_sgd)を読み込む。
+    if gs_data is None:
+        raise RuntimeError(
+            f"email グリッド結果が見つかりません({GRID_SEARCH_JSON})。先に "
+            "grid_search_email.py を実行してください。")
     hp_by_n = {}
-    if gs_data is not None:
-        print(f"\nLoaded grid search results from {GRID_SEARCH_JSON}")
-        for n_p in N_PARTICLES_LIST:
-            key = str(n_p)
-            if key in gs_data:
-                entry = gs_data[key]
-                best_pf = entry["best_pf"]
-                best_wspf_b = entry["best_wspf_b"]
-                best_wspf_a = entry.get("best_wspf_a", None)
-                if best_wspf_a is None:
-                    best_wspf_a = {**best_wspf_b, "beta": DEFAULT_BETA}
-            else:
-                print(f"  Warning: N={n_p} not found in grid search, "
-                      "using defaults")
-                best_pf = {
-                    "eta": DEFAULT_ETA, "sigma_sys": DEFAULT_SIGMA_SYS,
-                    "prior_std": DEFAULT_PRIOR_STD,
-                }
-                best_wspf_b = {
-                    "eta": DEFAULT_ETA, "sigma_sys": DEFAULT_SIGMA_SYS,
-                    "prior_std": DEFAULT_PRIOR_STD,
-                }
-                best_wspf_a = {
-                    "eta": DEFAULT_ETA, "sigma_sys": DEFAULT_SIGMA_SYS,
-                    "prior_std": DEFAULT_PRIOR_STD, "beta": DEFAULT_BETA,
-                }
-            hp_by_n[n_p] = (best_pf, best_wspf_b, best_wspf_a)
-            print(
-                f"  N={n_p}:\n"
-                f"    PF:    eta={best_pf['eta']}, "
-                f"sigma_sys={best_pf['sigma_sys']}, "
-                f"prior_std={best_pf['prior_std']}\n"
-                f"    WSPF-B: eta={best_wspf_b['eta']}, "
-                f"sigma_sys={best_wspf_b['sigma_sys']}, "
-                f"prior_std={best_wspf_b['prior_std']}\n"
-                f"    WSPF-A: eta={best_wspf_a['eta']}, "
-                f"sigma_sys={best_wspf_a['sigma_sys']}, "
-                f"prior_std={best_wspf_a['prior_std']}, "
-                f"beta={best_wspf_a['beta']}"
-            )
-    else:
-        print(f"\nNo grid search results found ({GRID_SEARCH_JSON})")
-        print("Using default hyperparameters")
-        best_pf = {
-            "eta": DEFAULT_ETA, "sigma_sys": DEFAULT_SIGMA_SYS,
-            "prior_std": DEFAULT_PRIOR_STD,
-        }
-        best_wspf_b = {
-            "eta": DEFAULT_ETA, "sigma_sys": DEFAULT_SIGMA_SYS,
-            "prior_std": DEFAULT_PRIOR_STD,
-        }
-        best_wspf_a = {
-            "eta": DEFAULT_ETA, "sigma_sys": DEFAULT_SIGMA_SYS,
-            "prior_std": DEFAULT_PRIOR_STD, "beta": DEFAULT_BETA,
-        }
-        for n_p in N_PARTICLES_LIST:
-            hp_by_n[n_p] = (best_pf, best_wspf_b, best_wspf_a)
+    print(f"\nLoaded grid search results from {GRID_SEARCH_JSON}")
+    for n_p in N_PARTICLES_LIST:
+        key = str(n_p)
+        if key not in gs_data:
+            raise KeyError(f"email グリッド JSON に N={n_p} がありません。")
+        entry = gs_data[key]
+        for k in ("best_pf", "best_wspf_b", "best_wspf_a", "best_sgd"):
+            if k not in entry:
+                raise KeyError(
+                    f"email グリッド JSON に '{k}' がありません(旧キー/SGD未選択の"
+                    "可能性)。グリッドを再生成してください。")
+        best_pf = entry["best_pf"]
+        best_wspf_b = entry["best_wspf_b"]
+        best_wspf_a = entry["best_wspf_a"]
+        best_sgd = entry["best_sgd"]
+        if "beta" not in best_wspf_a:
+            raise KeyError("best_wspf_a に 'beta' がありません。")
+        hp_by_n[n_p] = (best_pf, best_wspf_b, best_wspf_a, best_sgd)
+        print(
+            f"  N={n_p}:\n"
+            f"    PF:    eta={best_pf['eta']}, "
+            f"sigma_sys={best_pf['sigma_sys']}, "
+            f"prior_std={best_pf['prior_std']}\n"
+            f"    WSPF-B: eta={best_wspf_b['eta']}, "
+            f"sigma_sys={best_wspf_b['sigma_sys']}, "
+            f"prior_std={best_wspf_b['prior_std']}\n"
+            f"    WSPF-A: eta={best_wspf_a['eta']}, "
+            f"sigma_sys={best_wspf_a['sigma_sys']}, "
+            f"prior_std={best_wspf_a['prior_std']}, "
+            f"beta={best_wspf_a['beta']}\n"
+            f"    SGD(独立): eta={best_sgd['eta']}, "
+            f"prior_std={best_sgd['prior_std']}"
+        )
 
     # -------- 粒子数ごとに実験 --------
     all_results = {}
@@ -674,9 +655,9 @@ def main():
     eval_start = None
 
     for n_particles in N_PARTICLES_LIST:
-        best_pf, best_wspf_b, best_wspf_a = hp_by_n[n_particles]
-        sgd_eta = best_pf["eta"]
-        sgd_prior = best_pf["prior_std"]
+        best_pf, best_wspf_b, best_wspf_a, best_sgd = hp_by_n[n_particles]
+        sgd_eta = best_sgd["eta"]     # SGD 独自 η(PF best 連動をやめ交絡除去)
+        sgd_prior = best_sgd["prior_std"]
 
         print(f"\n{'=' * 70}")
         print(f"Running experiment with N_PARTICLES = {n_particles}")

@@ -73,7 +73,7 @@ def _run_baseline(learner, loader, model):
 
 
 def _seed_job(args):
-    seed, bp, bb, ba = args
+    seed, bp, bb, ba, best_sgd = args
     loader = EmailDataLoader(EB.DATA_PATH, n_components=EB.PCA_DIM,
                              seed=EB.SEED, pca_fit_end=EB.PCA_FIT_END)
     model = NeuralNetModel(input_dim=loader.input_dim, hidden_dim=EB.HIDDEN_DIM,
@@ -91,19 +91,21 @@ def _seed_job(args):
         n_particles=N_PARTICLES, model=model, loader=loader, grad_fn=grad_fn,
         loglik_fn=loglik_fn, ps_grad_fn=ps_grad_fn,
         best_pf=bp, best_wspf_b=bb, best_wspf_a=ba,
-        sgd_eta=bp["eta"], sgd_prior=bp["prior_std"], param_dim=param_dim,
-        seed=seed)
+        sgd_eta=best_sgd["eta"], sgd_prior=best_sgd["prior_std"],
+        param_dim=param_dim, seed=seed)
     out = {r["method"]: {"f1": r["f1"], "acc": r["accuracy"]}
            for r in result_rows}
 
-    # ベースライン(SGD の HP を流用)
+    # ベースライン(SGD 系学習器なので SGD 独自 HP を使用)
     learners = {
         "PH-SGD": DriftResetSGD(
-            param_dim=param_dim, eta=bp["eta"], prior_std=bp["prior_std"],
+            param_dim=param_dim, eta=best_sgd["eta"],
+            prior_std=best_sgd["prior_std"],
             grad_fn=grad_fn, detector=PageHinkley(delta=0.01, lambda_=2.0),
             seed=seed + 20, grad_clip_norm=EB.MAX_GRAD_NORM),
         "Window-SGD": WindowSGD(
-            param_dim=param_dim, eta=bp["eta"], prior_std=bp["prior_std"],
+            param_dim=param_dim, eta=best_sgd["eta"],
+            prior_std=best_sgd["prior_std"],
             grad_fn=grad_fn, window=WINDOW, seed=seed + 20,
             grad_clip_norm=EB.MAX_GRAD_NORM),
     }
@@ -129,7 +131,7 @@ def paired(pf, alt):
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    bp, bb, ba, src = load_hp(N_PARTICLES)
+    bp, bb, ba, best_sgd, src = load_hp(N_PARTICLES)
     lines = []
     def emit(s=""):
         print(s); lines.append(s)
@@ -142,7 +144,7 @@ def main():
 
     per = {m: {"f1": [], "acc": []} for m in ALL_METHODS}
     resets = {m: [] for m in BASE_METHODS}
-    jobs = [(s, bp, bb, ba) for s in SEEDS_MULTI]
+    jobs = [(s, bp, bb, ba, best_sgd) for s in SEEDS_MULTI]
     with ProcessPoolExecutor(max_workers=min(os.cpu_count() or 1, len(jobs))) as ex:
         for seed, out in ex.map(_seed_job, jobs):
             for m in ALL_METHODS:

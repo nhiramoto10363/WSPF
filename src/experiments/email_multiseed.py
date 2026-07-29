@@ -59,20 +59,21 @@ def load_hp(n_p):
             f"email グリッド結果が見つかりません(N={n_p})。先に "
             "grid_search_email.py を実行してください。")
     e = gs[str(n_p)]
-    for k in ("best_pf", "best_wspf_b", "best_wspf_a"):
+    for k in ("best_pf", "best_wspf_b", "best_wspf_a", "best_sgd"):
         if k not in e:
             raise KeyError(
-                f"email グリッド JSON に '{k}' がありません(旧キー best_cpf 等の"
+                f"email グリッド JSON に '{k}' がありません(旧キー/SGD未選択の"
                 "可能性)。グリッドを再生成してください。")
     ba = e["best_wspf_a"]
     if "beta" not in ba:
         raise KeyError("best_wspf_a に 'beta' がありません。")
-    return e["best_pf"], e["best_wspf_b"], ba, "grid"
+    # best_sgd を追加(SGD 独自 η, R1-7 交絡除去)
+    return e["best_pf"], e["best_wspf_b"], ba, e["best_sgd"], "grid"
 
 
 def _seed_job(args):
     """1 シードの実験(worker 内で loader/model を再構築)。"""
-    seed, n_p, bp, bb, ba = args
+    seed, n_p, bp, bb, ba, best_sgd = args
     loader = EmailDataLoader(EB.DATA_PATH, n_components=EB.PCA_DIM,
                              seed=EB.SEED, pca_fit_end=EB.PCA_FIT_END)
     model = NeuralNetModel(input_dim=loader.input_dim, hidden_dim=EB.HIDDEN_DIM,
@@ -90,8 +91,8 @@ def _seed_job(args):
         n_particles=n_p, model=model, loader=loader,
         grad_fn=grad_fn, loglik_fn=loglik_fn, ps_grad_fn=ps_grad_fn,
         best_pf=bp, best_wspf_b=bb, best_wspf_a=ba,
-        sgd_eta=bp["eta"], sgd_prior=bp["prior_std"], param_dim=param_dim,
-        seed=seed)
+        sgd_eta=best_sgd["eta"], sgd_prior=best_sgd["prior_std"],
+        param_dim=param_dim, seed=seed)
     return seed, {r["method"]: {"acc": r["accuracy"], "f1": r["f1"],
                                 "loglik": r["loglik"]} for r in result_rows}
 
@@ -116,7 +117,7 @@ def paired_report(pf_vals, alt_vals):
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    bp, bb, ba, src = load_hp(N_PARTICLES)
+    bp, bb, ba, best_sgd, src = load_hp(N_PARTICLES)
     lines = []
     def emit(s=""):
         print(s); lines.append(s)
@@ -130,7 +131,7 @@ def main():
     emit(f"  (leak-free: PCA fit 期1-2, report 期3-5)")
     emit("=" * 72)
 
-    jobs = [(s, N_PARTICLES, bp, bb, ba) for s in SEEDS_MULTI]
+    jobs = [(s, N_PARTICLES, bp, bb, ba, best_sgd) for s in SEEDS_MULTI]
     per_seed = {m: {"acc": [], "f1": [], "loglik": []} for m in METHODS}
     n_workers = min(os.cpu_count() or 1, len(SEEDS_MULTI))
     with ProcessPoolExecutor(max_workers=n_workers) as ex:

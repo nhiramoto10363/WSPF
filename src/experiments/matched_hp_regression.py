@@ -61,10 +61,10 @@ def build_matched_hp():
         if str(n_p) not in grid:
             raise KeyError(f"グリッド JSON に N={n_p} がありません。")
         entry = grid[str(n_p)]
-        for k in ("best_pf", "best_wspf_a"):
+        for k in ("best_pf", "best_wspf_a", "best_sgd"):
             if k not in entry:
                 raise KeyError(
-                    f"グリッド JSON に '{k}' がありません(旧キーの可能性)。"
+                    f"グリッド JSON に '{k}' がありません(旧キー/SGD未選択の可能性)。"
                     "グリッドを再生成してください。")
         if "beta" not in entry["best_wspf_a"]:
             raise KeyError("best_wspf_a に 'beta' がありません。")
@@ -75,7 +75,8 @@ def build_matched_hp():
             "sigma_sys": best_pf["sigma_sys"],
             "prior_std": best_pf["prior_std"],
         }
-        matched_by_n[n_p] = (matched, beta, "grid best_pf")
+        # SGD は matched 対象外(独立)。SGD 独自 best_sgd をそのまま渡す。
+        matched_by_n[n_p] = (matched, beta, "grid best_pf", entry["best_sgd"])
     return matched_by_n
 
 
@@ -122,8 +123,9 @@ def main():
     emit(f"  seeds={len(SEEDS)}, T={T}, EVAL_START={EVAL_START}")
     emit("=" * 72)
     for n_p in N_PARTICLES_LIST:
-        matched, beta, src = matched_by_n[n_p]
-        emit(f"  N={n_p}: (η,σcd,σ0)={matched} [{src}], WSPF-A β={beta}")
+        matched, beta, src, best_sgd = matched_by_n[n_p]
+        emit(f"  N={n_p}: (η,σcd,σ0)={matched} [{src}], WSPF-A β={beta}, "
+             f"SGD(独立)η={best_sgd['eta']}")
 
     # ---- 並列実行 ----
     task_list = [(n_p, seed) for n_p in N_PARTICLES_LIST for seed in SEEDS]
@@ -139,12 +141,13 @@ def main():
     with ProcessPoolExecutor(max_workers=n_workers) as ex:
         futs = {}
         for n_p, seed in task_list:
-            matched, beta, _ = matched_by_n[n_p]
+            matched, beta, _, best_sgd = matched_by_n[n_p]
             best_pf = matched
             best_wspf_b = dict(matched)
             best_wspf_a = {**matched, "beta": beta}
             fut = ex.submit(run_single, seed, n_p,
-                            best_pf, best_wspf_b, best_wspf_a)
+                            best_pf, best_wspf_b, best_wspf_a,
+                            best_sgd=best_sgd)
             futs[fut] = (n_p, seed)
         done = 0
         for fut in as_completed(futs):

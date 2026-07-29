@@ -70,10 +70,11 @@ DATA_PATH = os.path.join(
 # グリッドサーチ設定
 # ================================================================
 GRID_ETA = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
-            1.0, 1.25, 1.5]   # 上限到達を避けるため 1.0 超へ延長 (R1-minor)
+            1.0, 1.25, 1.5, 2.0, 2.5, 3.0]   # 内点最大を確認するため 3.0 まで延長 (R1-minor)
 GRID_SIGMA_SYS = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1,0.125,0.15,0.175,0.2]
 GRID_PRIOR_STD = [0.01,0.1, 0.25,0.5,0.75,1.0]
 GRID_BETA = [0.1,0.3,0.5, 0.9, 0.95]  # WSPF-A 専用
+SGD_PRIOR_STD = 0.1   # SGD 初期化 σ0(1次元 η 選択で固定; 点SGDでは init 影響小)
 
 # リーク除去(R1-13): warm-up/validation 区間(期1-2 = サンプル 0-599,
 # ドリフト@300 を1回含む)でのみ PCA 学習とハイパラ選択を行う。
@@ -153,6 +154,38 @@ def _make_batch_windows(n_samples, batch_size, test_size, max_steps, eval_start,
 def _chunked(seq, size):
     for i in range(0, len(seq), size):
         yield seq[i:i + size]
+
+
+def _evaluate_sgd_email(eta, X, y, input_dim, batch_windows):
+    """SGD(点推定)を η について 1 次元評価(F1, σ0=SGD_PRIOR_STD 固定)。
+
+    SGD は独立に走り粒子に依存しないので PF best への連動をやめ、SGD 独自 η を
+    選択する(R1-7 交絡の除去)。選択区間(期1-2)の do_eval 窓で F1 を集計。
+    """
+    model = NeuralNetModel(input_dim=input_dim, hidden_dim=HIDDEN_DIM,
+                           output_dim=1, activation="tanh")
+    param_dim = model.param_dim
+    grad_raw = create_nn_grad_fn(model)
+
+    def cg(theta, Xb, yb):
+        g = grad_raw(theta, Xb, yb)
+        n = np.linalg.norm(g, axis=1, keepdims=True)
+        return g * np.minimum(1.0, MAX_GRAD_NORM / (n + 1e-8))
+
+    rng = np.random.default_rng(SEED + 10)
+    theta = rng.normal(0.0, SGD_PRIOR_STD, size=param_dim)
+    f1_sum = 0.0
+    n_eval = 0
+    for tr0, tr1, te0, te1, do_eval in batch_windows:
+        if do_eval:
+            out, _, _ = model.forward(theta.reshape(1, -1), X[te0:te1])
+            pred = (out.reshape(-1) > 0.5).astype(np.float32)
+            f1_sum += _compute_f1_binary(pred, y[te0:te1])
+            n_eval += 1
+        g = cg(theta.reshape(1, -1), X[tr0:tr1], y[tr0:tr1]).squeeze()
+        theta = theta - eta * g
+    return {"eta": eta, "prior_std": SGD_PRIOR_STD,
+            "f1": (f1_sum / n_eval if n_eval else 0.0)}
 
 
 # ================================================================
@@ -427,6 +460,15 @@ def main():
         "by_n_particles": {},
     }
 
+    # SGD 独自の η 選択(1 次元, N 非依存)。PF best への連動をやめ交絡を除去。
+    sgd_results = sorted(
+        (_evaluate_sgd_email(eta, X, y, input_dim, batch_windows)
+         for eta in GRID_ETA),
+        key=lambda r: -r["f1"])
+    best_sgd = {"eta": sgd_results[0]["eta"],
+                "prior_std": sgd_results[0]["prior_std"]}
+    print(f"  Best SGD: {best_sgd}  (F1={sgd_results[0]['f1']:.4f})")
+
     for n_p in N_PARTICLES_LIST:
         for method in ["PF", "WSPF-B", "WSPF-A"]:
             results_by_n[n_p][method].sort(key=lambda r: -r["f1"])
@@ -448,9 +490,11 @@ def main():
             "best_pf": best_pf,
             "best_wspf_b": best_wspf_b,
             "best_wspf_a": best_wspf_a,
+            "best_sgd": best_sgd,   # SGD 独自 η (N 非依存, 全 N で同値)
             "all_pf": results_by_n[n_p]["PF"],
             "all_wspf_b": results_by_n[n_p]["WSPF-B"],
             "all_wspf_a": results_by_n[n_p]["WSPF-A"],
+            "all_sgd": sgd_results,
         }
 
         print(f"\n{'=' * 70}")

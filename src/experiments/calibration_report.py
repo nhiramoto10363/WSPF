@@ -61,8 +61,8 @@ def _ev(a):
 # Regression
 # ================================================================
 def _reg_job(args):
-    seed, bp, bb, ba = args
-    res = run_single(seed, N_PARTICLES, bp, bb, ba)
+    seed, bp, bb, ba, best_sgd = args
+    res = run_single(seed, N_PARTICLES, bp, bb, ba, best_sgd=best_sgd)
     out = {"cov": {}, "spread": {}, "unique": {}, "mse_ts": {},
            "switch": res["switch_times"]}
     for m in REG_METHODS:
@@ -76,9 +76,9 @@ def _reg_job(args):
 
 
 def regression_calibration(emit):
-    matched, beta, src = build_matched_hp()[N_PARTICLES]
+    matched, beta, src, best_sgd = build_matched_hp()[N_PARTICLES]
     bp = dict(matched); bb = dict(matched); ba = {**matched, "beta": beta}
-    jobs = [(s, bp, bb, ba) for s in SEEDS]
+    jobs = [(s, bp, bb, ba, best_sgd) for s in SEEDS]
     results = []
     with ProcessPoolExecutor(max_workers=min(os.cpu_count() or 1, len(jobs))) as ex:
         for r in ex.map(_reg_job, jobs):
@@ -149,9 +149,9 @@ def _brier_ece(probs, labels, n_bins=10):
 
 
 def email_calibration(emit):
-    bp, bb, ba, src = load_hp(N_PARTICLES)
+    bp, bb, ba, best_sgd, src = load_hp(N_PARTICLES)
     seeds = list(range(10))
-    jobs = [(s, bp, bb, ba) for s in seeds]
+    jobs = [(s, bp, bb, ba, best_sgd) for s in seeds]
     # _email_seed_job は (seed, {method:{f1,acc}}) を返すため、較正には
     # 予測確率が必要 → run_experiment を直接呼ぶ専用 worker を使う
     pooled = {m: {"p": [], "y": []} for m in EMAIL_METHODS}
@@ -175,7 +175,7 @@ def email_calibration(emit):
 
 
 def _email_calib_job(args):
-    seed, bp, bb, ba = args
+    seed, bp, bb, ba, best_sgd = args
     from src.data import EmailDataLoader
     from src.models.neural_net import (
         NeuralNetModel, create_nn_grad_fn, create_nn_loglik_fn,
@@ -195,7 +195,7 @@ def _email_calib_job(args):
     (*_head, diagnostics) = EB.run_experiment(
         n_particles=N_PARTICLES, model=model, loader=loader, grad_fn=gfn,
         loglik_fn=loglik_fn, ps_grad_fn=ps, best_pf=bp, best_wspf_b=bb,
-        best_wspf_a=ba, sgd_eta=bp["eta"], sgd_prior=bp["prior_std"],
+        best_wspf_a=ba, sgd_eta=best_sgd["eta"], sgd_prior=best_sgd["prior_std"],
         param_dim=pd_, seed=seed)
     calib = diagnostics["_calib"]
     return calib["probs"], calib["labels"]

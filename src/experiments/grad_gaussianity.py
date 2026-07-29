@@ -176,13 +176,14 @@ def run_part_a(emit):
 # ================================================================
 def _partb_job(args):
     """Part B の 1 ジョブ(モジュールレベル: ProcessPool でピクル可能)。"""
-    B, seed, bp, bb, ba = args
-    res = run_single(seed, N_PARTICLES, bp, bb, ba, batch_size=B)
+    B, seed, bp, bb, ba, best_sgd = args
+    res = run_single(seed, N_PARTICLES, bp, bb, ba, batch_size=B,
+                     best_sgd=best_sgd)
     return B, {m: float(np.asarray(res["mse"][m])[EVAL_START:].mean())
                for m in METHODS}
 
 
-def run_part_b(emit, matched, beta):
+def run_part_b(emit, matched, beta, best_sgd):
     emit(f"\n{'='*72}\n  Part B: 手法性能 vs バッチサイズ B (eval-region MSE)\n{'='*72}")
     jobs = []
     for B in BATCH_SIZES:
@@ -190,7 +191,7 @@ def run_part_b(emit, matched, beta):
         bb = dict(bp)
         ba = {**bp, "beta": beta}
         for seed in SEEDS:
-            jobs.append((B, seed, bp, bb, ba))
+            jobs.append((B, seed, bp, bb, ba, best_sgd))
 
     mse_by_B = {B: {m: [] for m in METHODS} for B in BATCH_SIZES}
     n_workers = min(os.cpu_count() or 1, 48)
@@ -275,7 +276,7 @@ def plot_mse_vs_B(curve, path):
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    matched, beta, src = build_matched_hp()[N_PARTICLES]
+    matched, beta, src, best_sgd = build_matched_hp()[N_PARTICLES]
     lines = []
     def emit(s=""):
         print(s)
@@ -289,7 +290,7 @@ def main():
 
     t0 = time.time()
     resultsA, spectra, scenarios, sw = run_part_a(emit)
-    curve = run_part_b(emit, matched, beta)
+    curve = run_part_b(emit, matched, beta, best_sgd)
     emit(f"\n  total elapsed {time.time()-t0:.0f}s")
 
     # ---- プロット ----

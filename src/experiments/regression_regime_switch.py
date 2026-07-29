@@ -201,7 +201,7 @@ def compute_coverage_particle(model, particles, weights, X, y, noise_std, z):
 # 1条件の実験
 # ================================================================
 def run_single(seed, n_particles, best_pf, best_wspf_b, best_wspf_a,
-               snapshot_times=None, batch_size=None):
+               snapshot_times=None, batch_size=None, best_sgd=None):
     model = NeuralNetRegression(INPUT_DIM, HIDDEN_DIM, output_dim=1, activation="tanh")
     param_dim = model.param_dim
 
@@ -236,8 +236,12 @@ def run_single(seed, n_particles, best_pf, best_wspf_b, best_wspf_a,
         return g * scale
 
     # SGD は PF の eta / prior_std を使用
-    sgd_eta = best_pf["eta"]
-    sgd_prior = best_pf["prior_std"]
+    # SGD は独立に走る。PF best への連動をやめ、SGD 独自 best_sgd を使う
+    # (R1-7 交絡の除去)。best_sgd 未指定時のみ後方互換で best_pf を流用。
+    if best_sgd is None:
+        best_sgd = best_pf
+    sgd_eta = best_sgd["eta"]
+    sgd_prior = best_sgd["prior_std"]
 
     rng_sgd = np.random.default_rng(seed + 10)
     theta_sgd = rng_sgd.normal(0.0, sgd_prior, size=param_dim)
@@ -404,7 +408,7 @@ def save_result_tables(output_dir, all_results, n_particles_list, methods,
         f.write("=" * 80 + "\n\n")
 
         for n_p in n_particles_list:
-            best_pf, best_wspf_b, best_wspf_a = hp_by_n[n_p]
+            best_pf, best_wspf_b, best_wspf_a, _best_sgd = hp_by_n[n_p]
             f.write(f"N = {n_p}\n")
             f.write(f"  PF:     eta={best_pf['eta']}, "
                     f"sigma_sys={best_pf['sigma_sys']}, "
@@ -1584,17 +1588,18 @@ def main():
         if key not in gs_data:
             raise KeyError(f"グリッド JSON に N={n_p} がありません。")
         entry = gs_data[key]
-        for k in ("best_pf", "best_wspf_b", "best_wspf_a"):
+        for k in ("best_pf", "best_wspf_b", "best_wspf_a", "best_sgd"):
             if k not in entry:
                 raise KeyError(
                     f"グリッド JSON に '{k}' がありません(旧キー best_cpf 等の"
-                    "可能性)。グリッドを再生成してください。")
+                    "可能性、または SGD 独自 η 未選択)。グリッドを再生成してください。")
         best_pf = entry["best_pf"]
         best_wspf_b = entry["best_wspf_b"]
         best_wspf_a = entry["best_wspf_a"]
+        best_sgd = entry["best_sgd"]
         if "beta" not in best_wspf_a:
             raise KeyError("best_wspf_a に 'beta' がありません。")
-        hp_by_n[n_p] = (best_pf, best_wspf_b, best_wspf_a)
+        hp_by_n[n_p] = (best_pf, best_wspf_b, best_wspf_a, best_sgd)
         print(
             f"  N={n_p}:\n"
             f"    PF:     eta={best_pf['eta']}, "
@@ -1662,9 +1667,10 @@ def main():
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         futures = {}
         for n_p, seed in task_list:
-            best_pf, best_wspf_b, best_wspf_a = hp_by_n[n_p]
+            best_pf, best_wspf_b, best_wspf_a, best_sgd = hp_by_n[n_p]
             future = executor.submit(
                 run_single, seed, n_p, best_pf, best_wspf_b, best_wspf_a,
+                best_sgd=best_sgd,
             )
             futures[future] = (n_p, seed)
 
@@ -1900,11 +1906,11 @@ def main():
     # -------- スナップショットプロット --------
     # seed=0 で 1 回再実行してスナップショットを取得
     n_p_snap = N_PARTICLES_LIST[0]
-    best_pf_s, best_wspf_b_s, best_wspf_a_s = hp_by_n[n_p_snap]
+    best_pf_s, best_wspf_b_s, best_wspf_a_s, best_sgd_s = hp_by_n[n_p_snap]
     print(f"\nGenerating snapshot plots (seed=0, N={n_p_snap}) ...")
     snap_result = run_single(
         SEEDS[0], n_p_snap, best_pf_s, best_wspf_b_s, best_wspf_a_s,
-        snapshot_times=SNAPSHOT_TIMES,
+        snapshot_times=SNAPSHOT_TIMES, best_sgd=best_sgd_s,
     )
     snap_model = NeuralNetRegression(
         INPUT_DIM, HIDDEN_DIM, output_dim=1, activation="tanh",

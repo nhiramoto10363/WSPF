@@ -50,7 +50,8 @@ SEED = 1000   # パイロット(選択)用シード。評価シード range(10) 
 # ================================================================
 GRID_ETA = [0.01, 0.1,0.2,0.3,0.4,0.5]
 GRID_SIGMA_SYS = [0.01, .05,  0.1,0.15,0.2]
-GRID_PRIOR_STD = [0.0,0.01,0.1, 0.2, 0.3, 0.5]
+GRID_PRIOR_STD = [0.01, 0.1, 0.2, 0.3, 0.5]  # σ0=0.0(点質量)は除去(論文の N(0,σ0²) と矛盾)
+SGD_PRIOR_STD = 0.3   # SGD 初期化 θ0~N(0,σ0²) の固定 σ0(点SGDでは init の影響は小)
 GRID_BETA = [0.8, 0.9, 0.95, 0.99]  # WSPF-A 専用
 N_PARTICLES_LIST = [100]
 GRID_SEARCH_T = 200
@@ -189,6 +190,40 @@ def _evaluate_candidate(args):
     return (method, n_particles, eta, sigma_sys, prior_std, beta, mean_mse)
 
 
+def _evaluate_sgd(eta):
+    """SGD(点推定)を η について 1 次元評価する(σ0=SGD_PRIOR_STD 固定)。
+
+    SGD は独立に走り粒子/σcd に依存しないので、PF best への連動をやめて
+    SGD 独自の η を選ぶための評価(R1-7 交絡の除去)。
+    """
+    model = NeuralNetRegression(INPUT_DIM, HIDDEN_DIM, output_dim=1,
+                                activation="tanh")
+    param_dim = model.param_dim
+    X_train, y_train, X_test, y_test = generate_regression_regime_data(
+        model, T=GRID_SEARCH_T, batch_size=BATCH_SIZE,
+        test_size=TEST_SIZE, noise_std=NOISE_STD, seed=SEED,
+    )
+    grad_fn = create_regression_grad_fn(model, NOISE_STD)
+
+    def clipped_grad_fn(theta, X, y):
+        g = grad_fn(theta, X, y)
+        norms = np.linalg.norm(g, axis=1, keepdims=True)
+        scale = np.minimum(1.0, MAX_GRAD_NORM / (norms + 1e-12))
+        return g * scale
+
+    rng = np.random.default_rng(SEED + 10)
+    theta = rng.normal(0.0, SGD_PRIOR_STD, size=param_dim)
+    mse_list = []
+    for t in range(GRID_SEARCH_T):
+        g = clipped_grad_fn(theta.reshape(1, -1), X_train[t], y_train[t]).squeeze()
+        theta = theta - eta * g
+        if t >= GRID_EVAL_START:
+            out, _, _ = model.forward(theta.reshape(1, -1), X_test[t])
+            mse_list.append(float(np.mean((out.squeeze() - y_test[t]) ** 2)))
+    mean_mse = float(np.mean(mse_list)) if mse_list else float("inf")
+    return {"eta": eta, "prior_std": SGD_PRIOR_STD, "mse": mean_mse}
+
+
 # ================================================================
 # メイン
 # ================================================================
@@ -282,6 +317,13 @@ def main():
     elapsed = time.time() - t0
     print(f"\nGrid search completed in {elapsed:.1f}s ({n_workers} workers)")
 
+    # SGD 独自の η 選択(1 次元, N 非依存)。PF best への連動をやめ交絡を除去。
+    sgd_results = sorted((_evaluate_sgd(eta) for eta in GRID_ETA),
+                         key=lambda r: r["mse"])
+    best_sgd = {"eta": sgd_results[0]["eta"],
+                "prior_std": sgd_results[0]["prior_std"]}
+    print(f"  Best SGD: {best_sgd}  (MSE={sgd_results[0]['mse']:.4f})")
+
     # ソート（MSE 昇順）& JSON 構築
     output_data = {
         "grid": {
@@ -318,9 +360,11 @@ def main():
             "best_pf": best_pf,
             "best_wspf_b": best_wspf_b,
             "best_wspf_a": best_wspf_a,
+            "best_sgd": best_sgd,   # SGD 独自 η (N 非依存, 全 N で同値)
             "all_pf": results_by_n[n_p]["PF"],
             "all_wspf_b": results_by_n[n_p]["WSPF-B"],
             "all_wspf_a": results_by_n[n_p]["WSPF-A"],
+            "all_sgd": sgd_results,
         }
 
         # 結果表示

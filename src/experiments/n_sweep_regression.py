@@ -47,8 +47,8 @@ def _ev(a):
 
 def _nsweep_job(args):
     """1 (N, seed) ジョブ。histories から eval-region 集計値のみ返す(軽量)。"""
-    N, seed, bp, bb, ba = args
-    res = run_single(seed, N, bp, bb, ba)
+    N, seed, bp, bb, ba, best_sgd = args
+    res = run_single(seed, N, bp, bb, ba, best_sgd=best_sgd)
     out = {"N": N, "mse": {}, "ess": {}, "ess_ratio": {}, "resample": {},
            "unique": {}, "t_step": {}}
     out["mse"]["SGD"] = float(_ev(res["mse"]["SGD"]).mean())
@@ -66,7 +66,7 @@ def _nsweep_job(args):
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    matched, beta, src = build_matched_hp()[100]
+    matched, beta, src, best_sgd = build_matched_hp()[100]
     lines = []
     def emit(s=""):
         print(s); lines.append(s)
@@ -81,7 +81,7 @@ def main():
     for N in N_GRID:
         bp = dict(matched); bb = dict(matched); ba = {**matched, "beta": beta}
         for seed in SEEDS:
-            jobs.append((N, seed, bp, bb, ba))
+            jobs.append((N, seed, bp, bb, ba, best_sgd))
 
     # 集計コンテナ
     agg = {N: {"mse": {m: [] for m in ALL_METHODS},

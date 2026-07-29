@@ -57,11 +57,12 @@ def _eval_slice(arr):
 
 def run_one(args):
     """(sigma_cd, seed) を 1 ジョブとして実行。"""
-    sigma_cd, seed, n_p, matched, beta = args
+    sigma_cd, seed, n_p, matched, beta, best_sgd = args
     best_pf = {**matched, "sigma_sys": sigma_cd}
     best_wspf_b = {**matched, "sigma_sys": sigma_cd}
     best_wspf_a = {**matched, "sigma_sys": sigma_cd, "beta": beta}
-    res = run_single(seed, n_p, best_pf, best_wspf_b, best_wspf_a)
+    res = run_single(seed, n_p, best_pf, best_wspf_b, best_wspf_a,
+                     best_sgd=best_sgd)
 
     out = {"sigma_cd": sigma_cd, "seed": seed, "mse": {}}
     for m in METHODS:
@@ -83,7 +84,7 @@ def run_one(args):
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    matched, beta, src = build_matched_hp()[N_PARTICLES]
+    matched, beta, src, best_sgd = build_matched_hp()[N_PARTICLES]
 
     lines = []
     def emit(s=""):
@@ -97,7 +98,7 @@ def main():
     emit(f"  N={N_PARTICLES}, T={T}, seeds={len(SEEDS)}, EVAL_START={EVAL_START}")
     emit("=" * 72)
 
-    jobs = [(sc, seed, N_PARTICLES, matched, beta)
+    jobs = [(sc, seed, N_PARTICLES, matched, beta, best_sgd)
             for sc in SIGMA_CD_GRID for seed in SEEDS]
     n_workers = min(os.cpu_count() or 1, 48)
     emit(f"  workers={n_workers}, jobs={len(jobs)}")

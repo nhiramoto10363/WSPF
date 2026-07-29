@@ -52,18 +52,18 @@ def build_matched_hp():
         if str(n_p) not in gs:
             raise KeyError(f"email グリッド JSON に N={n_p} がありません。")
         entry = gs[str(n_p)]
-        for k in ("best_pf", "best_wspf_a"):
+        for k in ("best_pf", "best_wspf_a", "best_sgd"):
             if k not in entry:
                 raise KeyError(
-                    f"email グリッド JSON に '{k}' がありません(旧キーの可能性)。"
-                    "グリッドを再生成してください。")
+                    f"email グリッド JSON に '{k}' がありません(旧キー/SGD未選択の"
+                    "可能性)。グリッドを再生成してください。")
         if "beta" not in entry["best_wspf_a"]:
             raise KeyError("best_wspf_a に 'beta' がありません。")
         best_pf = entry["best_pf"]
         beta = entry["best_wspf_a"]["beta"]
         matched = {"eta": best_pf["eta"], "sigma_sys": best_pf["sigma_sys"],
                    "prior_std": best_pf["prior_std"]}
-        out[n_p] = (matched, beta, "grid best_pf")
+        out[n_p] = (matched, beta, "grid best_pf", entry["best_sgd"])
     return out
 
 
@@ -103,8 +103,9 @@ def main():
     csv_rows = [("n_particles", "method", "accuracy", "f1", "loglik",
                  "f1_delta_vs_pf")]
     for n_p in EB.N_PARTICLES_LIST:
-        matched, beta, src = matched_by_n[n_p]
-        emit(f"\n  N={n_p}: (η,σcd,σ0)={matched} [{src}], WSPF-A β={beta}")
+        matched, beta, src, best_sgd = matched_by_n[n_p]
+        emit(f"\n  N={n_p}: (η,σcd,σ0)={matched} [{src}], WSPF-A β={beta}, "
+             f"SGD(独立)η={best_sgd['eta']}")
 
         best_pf = matched
         best_wspf_b = dict(matched)
@@ -115,7 +116,7 @@ def main():
             n_particles=n_p, model=model, loader=loader,
             grad_fn=grad_fn, loglik_fn=loglik_fn, ps_grad_fn=ps_grad_fn,
             best_pf=best_pf, best_wspf_b=best_wspf_b, best_wspf_a=best_wspf_a,
-            sgd_eta=matched["eta"], sgd_prior=matched["prior_std"],
+            sgd_eta=best_sgd["eta"], sgd_prior=best_sgd["prior_std"],
             param_dim=param_dim,
         )
 
