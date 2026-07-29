@@ -1,0 +1,16 @@
+Email binary classification results
+(best hyperparameters per particle count)
+======================================================================
+
+N_Particles = 100
+  PF:    eta=0.9, sigma_sys=0.01, prior_std=0.25
+  CPF-B: eta=0.9, sigma_sys=0.01, prior_std=0.1
+  CPF-A: eta=0.9, sigma_sys=0.005, prior_std=0.1, beta=0.95
+  Method       Accuracy         F1    Log-Lik
+  ----------------------------------------------
+  NoChange       0.5480     0.3247    -3.1227
+  SGD            0.7226     0.6904    -0.7160
+  PF             0.7104     0.6572    -0.6033
+  CPF-A          0.7435     0.7224    -0.6799
+  CPF-B          0.7462     0.7235    -0.6833
+

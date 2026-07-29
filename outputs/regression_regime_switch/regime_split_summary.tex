@@ -1,0 +1,24 @@
+\begin{table}[t]
+\centering
+\caption{Regime-split test MSE (mean $\pm$ std): post-switch (first 10 steps) vs.\ stable (step 11 onward).}
+\label{tab:regime_split}
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}lc@{}}
+\toprule
+Method & $N=100$ \\
+\midrule
+\multicolumn{2}{l}{\textit{Post-switch MSE (first 10 steps)}} \\
+SGD & $0.7656 \pm 0.5496$ \\
+PF & $0.5435 \pm 0.2433$ \\
+WSPF-A & $0.5103 \pm 0.2543$ \\
+WSPF-B & $0.4544 \pm 0.1718$ \\
+\midrule
+\multicolumn{2}{l}{\textit{Stable MSE (step 11 $\sim$ next switch)}} \\
+SGD & $0.2908 \pm 0.0133$ \\
+PF & $0.3125 \pm 0.0333$ \\
+WSPF-A & $0.2875 \pm 0.0058$ \\
+WSPF-B & $0.2996 \pm 0.0039$ \\
+\bottomrule
+\end{tabular}
+\end{table}

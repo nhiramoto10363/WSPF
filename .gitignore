@@ -1,0 +1,24 @@
+# ===== 実行・環境依存(コード外) =====
+job.sh
+logs/
+instructions.txt
+
+# ===== 旧版・文献・原稿 =====
+Old_version/
+Related_literature/
+Tex/
+
+# ===== ノートブック・キャッシュ・生成物 =====
+*.ipynb
+**/.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ===== ローカル設定・OS =====
+.claude/settings.local.json
+.DS_Store
+
+# ===== 任意: 大きな出力を除外したい場合はコメント解除 =====
+# outputs/
+# *.npz

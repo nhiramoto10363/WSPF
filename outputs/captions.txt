@@ -1,0 +1,36 @@
+Table 1: Regime-Switching Regression Aggregate Results
+  Comparison of SGD, PF, WSPF-B, and WSPF-A on the regime-switching
+  regression simulation (T=500, 10 seeds, N=1000 particles). Test MSE
+  is averaged over evaluation steps (t >= 50). Relative improvement
+  is computed against PF.
+
+Table 2: Elec2 Binary Classification Results
+  Online test-then-train evaluation on the Elec2 electricity dataset
+  (N=1000 particles). Accuracy, F1 (UP class), and log-likelihood
+  are averaged after a warm-up period (first 10% of steps excluded).
+  Delta columns show the difference relative to PF.
+
+Figure 1: Switch-Aligned Recovery Plot
+  Test MSE in a window around each regime switch point
+  (tau in [-20, +40]). Mean +/- SE ribbons are computed over
+  10 seeds x 4 switch points = 40 segments per method. The vertical
+  dashed line marks the switch time (tau = 0).
+
+Figure 2: Elec2 Rolling F1 (UP class)
+  Rolling-mean F1 score (window = 50 steps) for PF, WSPF-B, and
+  WSPF-A on the Elec2 dataset. SGD is shown as a thin, faded line
+  for reference.
+
+Figure 3: Diagnostic Rho Comparison
+  Distribution of the signal-to-drift ratio rho_bar for WSPF-B and
+  WSPF-A across two settings. Panel A: Simulation (10 seeds x 450
+  evaluation steps). Panel B: Elec2 (after warm-up). Violin plots
+  with overlaid box plots show that Elec2 rho values are roughly
+  one order of magnitude smaller than simulation rho values.
+
+Figure 4: Elec2 Rho vs Accuracy Scatter
+  Per-step scatter plot of the signal-to-drift ratio rho_bar (x-axis)
+  vs test accuracy (y-axis) for WSPF-B (left) and WSPF-A (right) on
+  the Elec2 dataset (after warm-up). Binned mean and +/-1 SD bands
+  are overlaid to highlight the trend between regime-change strength
+  and classification performance.

@@ -1,0 +1,29 @@
+\begin{table}[t]
+\centering
+\caption{Regime-switching regression: test MSE (mean $\pm$ std) and ESS with best hyperparameters selected per particle count.}
+\label{tab:regression_regime_switch}
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}lc@{}}
+\toprule
+Method & $N=100$ \\
+\midrule
+\multicolumn{2}{l}{\textit{Test MSE (mean $\pm$ std)}} \\
+SGD & $0.3326 \pm 0.0494$ \\
+PF & $0.3376 \pm 0.0369$ \\
+WSPF-A & $0.3056 \pm 0.0233$ \\
+WSPF-B & $0.3135 \pm 0.0175$ \\
+\midrule
+\multicolumn{2}{l}{\textit{ESS (mean)}} \\
+PF & $60.9$ \\
+WSPF-A & $12.4$ \\
+WSPF-B & $33.3$ \\
+\midrule
+\multicolumn{2}{l}{\textit{90\% PI coverage}} \\
+SGD & $0.8629$ \\
+PF & $0.8789$ \\
+WSPF-A & $0.8796$ \\
+WSPF-B & $0.8892$ \\
+\bottomrule
+\end{tabular}
+\end{table}
