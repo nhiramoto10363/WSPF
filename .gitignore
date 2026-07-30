@@ -1,5 +1,6 @@
 # ===== 実行・環境依存(コード外) =====
 job.sh
+job_solar.sh
 logs/
 instructions.txt
 

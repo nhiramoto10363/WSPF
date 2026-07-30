@@ -1,0 +1,86 @@
+========================================================================
+GEFCom2014 Solar multi-seed experiment (R1-14/R2-1)
+  N=100, zones=[1, 2, 3], seeds=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  SGD={'eta': 0.05, 'prior_std': 0.1}  PF={'eta': 0.05, 'sigma_sys': 0.001, 'prior_std': 0.1}
+  WSPF-B={'eta': 0.05, 'sigma_sys': 0.005, 'prior_std': 0.1}
+  WSPF-A={'eta': 0.01, 'sigma_sys': 0.005, 'prior_std': 0.1, 'beta': 0.95}
+  noise_std=0.2927
+========================================================================
+  zone 1 seed 0 done (27s)
+  zone 1 seed 1 done (27s)
+  zone 1 seed 2 done (27s)
+  zone 1 seed 3 done (27s)
+  zone 1 seed 4 done (27s)
+  zone 1 seed 5 done (27s)
+  zone 1 seed 6 done (27s)
+  zone 1 seed 7 done (27s)
+  zone 1 seed 8 done (27s)
+  zone 1 seed 9 done (27s)
+  zone 2 seed 0 done (27s)
+  zone 2 seed 1 done (27s)
+  zone 2 seed 2 done (29s)
+  zone 2 seed 3 done (29s)
+  zone 2 seed 4 done (29s)
+  zone 2 seed 5 done (29s)
+  zone 2 seed 6 done (29s)
+  zone 2 seed 7 done (29s)
+  zone 2 seed 8 done (29s)
+  zone 2 seed 9 done (29s)
+  zone 3 seed 0 done (29s)
+  zone 3 seed 1 done (29s)
+  zone 3 seed 2 done (29s)
+  zone 3 seed 3 done (29s)
+  zone 3 seed 4 done (29s)
+  zone 3 seed 5 done (29s)
+  zone 3 seed 6 done (29s)
+  zone 3 seed 7 done (29s)
+  zone 3 seed 8 done (41s)
+  zone 3 seed 9 done (42s)
+
+===== Zone 1 =====
+  Method             MSE mean±std         MAE mean±std
+  SGD            0.02092±0.00057     0.10916±0.00203
+  PF             0.02022±0.00051     0.10683±0.00182
+  WSPF-A         0.01828±0.00063     0.10317±0.00208
+  WSPF-B         0.02243±0.00058     0.11338±0.00193
+
+  対応のある検定 (mse, 10 seeds):
+  comparison               mean(1)   mean(2)          Δ  paired-t p  Wilcoxon p
+  WSPF-A vs PF             0.01828   0.02022   -0.00193   4.674e-06    0.001953
+  WSPF-B vs PF             0.02243   0.02022   +0.00222   2.038e-05    0.001953
+  SGD vs PF                0.02092   0.02022   +0.00071     0.03011     0.04883
+  WSPF-A vs SGD            0.01828   0.02092   -0.00264   3.644e-05    0.001953
+  WSPF-B vs SGD            0.02243   0.02092   +0.00151    5.74e-05    0.001953
+  WSPF-A vs WSPF-B         0.01828   0.02243   -0.00415   4.635e-07    0.001953
+
+===== Zone 2 =====
+  Method             MSE mean±std         MAE mean±std
+  SGD            0.02360±0.00064     0.11542±0.00187
+  PF             0.02280±0.00086     0.11333±0.00260
+  WSPF-A         0.02067±0.00070     0.10848±0.00219
+  WSPF-B         0.02607±0.00136     0.12177±0.00329
+
+  対応のある検定 (mse, 10 seeds):
+  comparison               mean(1)   mean(2)          Δ  paired-t p  Wilcoxon p
+  WSPF-A vs PF             0.02067   0.02280   -0.00213   2.981e-05    0.001953
+  WSPF-B vs PF             0.02607   0.02280   +0.00327   0.0001368    0.001953
+  SGD vs PF                0.02360   0.02280   +0.00080     0.06432     0.06445
+  WSPF-A vs SGD            0.02067   0.02360   -0.00293    5.71e-06    0.001953
+  WSPF-B vs SGD            0.02607   0.02360   +0.00247    0.001871    0.003906
+  WSPF-A vs WSPF-B         0.02067   0.02607   -0.00540   3.418e-06    0.001953
+
+===== Zone 3 =====
+  Method             MSE mean±std         MAE mean±std
+  SGD            0.02184±0.00051     0.11054±0.00150
+  PF             0.02143±0.00031     0.10968±0.00092
+  WSPF-A         0.01858±0.00054     0.10201±0.00159
+  WSPF-B         0.02470±0.00106     0.11860±0.00299
+
+  対応のある検定 (mse, 10 seeds):
+  comparison               mean(1)   mean(2)          Δ  paired-t p  Wilcoxon p
+  WSPF-A vs PF             0.01858   0.02143   -0.00285   5.337e-07    0.001953
+  WSPF-B vs PF             0.02470   0.02143   +0.00327    3.14e-06    0.001953
+  SGD vs PF                0.02184   0.02143   +0.00041      0.0577     0.04883
+  WSPF-A vs SGD            0.01858   0.02184   -0.00326   4.923e-08    0.001953
+  WSPF-B vs SGD            0.02470   0.02184   +0.00285   1.668e-05    0.001953
+  WSPF-A vs WSPF-B         0.01858   0.02470   -0.00612   1.546e-07    0.001953
