@@ -7,10 +7,10 @@ insects_experiment.py が保存済みの npz (per-step の Accuracy / macro-F1 �
 change points) を後処理するのみ。実験の再実行は不要。
 
 各既知スイッチ点 cp について、スイッチ直後の train window を lag=0 として
-per-step 指標を整合させ、全スイッチで平均した「回復曲線」を描く。INSECTS
-abrupt balanced は 5 スイッチを持ち、email(4 ドリフト)より強いスイッチ整合
-解析ができる。WSPF-A/B が PF/SGD よりスイッチ後の劣化が浅く回復が速いことを
-可視化する。
+per-step 指標を整合させ、スイッチで平均した「回復曲線」を描く。整合対象は
+リークフリー評価と整合させるため報告区間のスイッチ (cp >= REPORT_START) の
+4 点に限定する (選択区間内の 14352 は除外)。WSPF-A/B が PF/SGD よりスイッチ後
+の劣化が浅く回復が速いことを可視化する。
 
 複数の results_N{n}_seed*.npz があればシード平均する (データ・スイッチ点は
 固定なので per-step 指標を平均できる)。
@@ -106,10 +106,17 @@ def main():
         print(s)
         lines.append(s)
 
+    # 報告区間のスイッチのみ整合対象にする (選択区間 [0,REPORT_START) の
+    # スイッチ 14352 はリークフリー評価の対象外なので除外)。
+    report_switches = np.asarray(
+        [int(c) for c in change_points if int(c) >= IE.REPORT_START])
+
     emit("=" * 72)
     emit("Switch-aligned recovery — INSECTS (旧 Fig. 5, multiclass)")
     emit(f"  seeds pooled={len(paths)}, "
-         f"change_points={[int(c) for c in change_points]}")
+         f"all change_points={[int(c) for c in change_points]}")
+    emit(f"  report-region switches (>= {IE.REPORT_START}): "
+         f"{[int(c) for c in report_switches]}")
     emit(f"  lag window: [-{PRE}, {LAGS}) steps (1 step = {BATCH_SIZE} samples)")
     emit("=" * 72)
 
@@ -117,8 +124,8 @@ def main():
     curves_acc = {}
     used = None
     for m in METHODS:
-        lags, cf1, u = align_recovery(f1[m], sample_positions, change_points)
-        _, cacc, _ = align_recovery(acc[m], sample_positions, change_points)
+        lags, cf1, u = align_recovery(f1[m], sample_positions, report_switches)
+        _, cacc, _ = align_recovery(acc[m], sample_positions, report_switches)
         curves_f1[m] = cf1
         curves_acc[m] = cacc
         used = u

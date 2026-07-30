@@ -1,6 +1,8 @@
 {
   "grid": {
     "eta": [
+      0.002,
+      0.005,
       0.01,
       0.05,
       0.1,
@@ -101,6 +103,33 @@
         {
           "method": "pf",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.01,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.028468716120655713
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.005,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.029334940017064833
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.01,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.029476393939629936
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
           "eta": 0.01,
           "sigma_sys": 0.025,
           "prior_std": 0.1,
@@ -119,11 +148,56 @@
         {
           "method": "pf",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.025,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.030042166627925544
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.025,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.03100673538686561
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.001,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.031096428690886222
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.005,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.03293899482599547
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
           "eta": 0.1,
           "sigma_sys": 0.01,
           "prior_std": 0.1,
           "beta": null,
           "mse": 0.03834853962084807
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.001,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.03838864825329983
         },
         {
           "method": "pf",
@@ -155,6 +229,15 @@
         {
           "method": "pf",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.05,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.04868456941757754
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
           "eta": 0.05,
           "sigma_sys": 0.05,
           "prior_std": 0.1,
@@ -169,6 +252,15 @@
           "prior_std": 0.1,
           "beta": null,
           "mse": 0.050520253902813526
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.05,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.06885145141421954
         },
         {
           "method": "pf",
@@ -263,6 +355,15 @@
         {
           "method": "pf",
           "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.1,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.18423966110053733
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
           "eta": 0.01,
           "sigma_sys": 0.1,
           "prior_std": 0.1,
@@ -277,6 +378,15 @@
           "prior_std": 0.5,
           "beta": null,
           "mse": 0.19771447592355074
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.1,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.21892711475384083
         },
         {
           "method": "pf",
@@ -389,6 +499,15 @@
         {
           "method": "pf",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.05,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.3411613777399302
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
           "eta": 0.01,
           "sigma_sys": 0.025,
           "prior_std": 0.5,
@@ -407,6 +526,24 @@
         {
           "method": "pf",
           "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.05,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.41120439563518846
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.1,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.4272871385648505
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
           "eta": 0.01,
           "sigma_sys": 0.1,
           "prior_std": 0.5,
@@ -416,11 +553,47 @@
         {
           "method": "pf",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.025,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.4661082692702612
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.025,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.48165269687795914
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.1,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.6513766889495404
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
           "eta": 0.2,
           "sigma_sys": 0.025,
           "prior_std": 0.5,
           "beta": null,
           "mse": 0.6585589744129159
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.01,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.6589481247782372
         },
         {
           "method": "pf",
@@ -475,6 +648,51 @@
           "prior_std": 0.5,
           "beta": null,
           "mse": 0.7424365694801404
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.005,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.8590655455960938
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.01,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.8815662853789116
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.001,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 1.201946382102197
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.005,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 1.38193880907912
+        },
+        {
+          "method": "pf",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.001,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 2.463444478428929
         },
         {
           "method": "pf",
@@ -774,11 +992,92 @@
         {
           "method": "wspf_b",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.025,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.03028919743058712
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.01,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.030590517973850713
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.005,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.030988769632619182
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.01,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.031091694403514523
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.001,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.033437106708233945
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.025,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.034739781980109935
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.005,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.03888133693650696
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
           "eta": 0.05,
           "sigma_sys": 0.05,
           "prior_std": 0.1,
           "beta": null,
           "mse": 0.04691203119706885
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.001,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.047577509598355654
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.05,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.048598909777418216
         },
         {
           "method": "wspf_b",
@@ -797,6 +1096,15 @@
           "prior_std": 0.1,
           "beta": null,
           "mse": 0.05345976016682642
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.05,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.053989037361593405
         },
         {
           "method": "wspf_b",
@@ -891,11 +1199,29 @@
         {
           "method": "wspf_b",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.025,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.16136274713609947
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
           "eta": 0.01,
           "sigma_sys": 0.025,
           "prior_std": 0.5,
           "beta": null,
           "mse": 0.1660679466451712
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.05,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.17876143052293297
         },
         {
           "method": "wspf_b",
@@ -914,6 +1240,15 @@
           "prior_std": 0.5,
           "beta": null,
           "mse": 0.22022475988232834
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.1,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.22433356722009679
         },
         {
           "method": "wspf_b",
@@ -954,6 +1289,15 @@
         {
           "method": "wspf_b",
           "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.05,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.2545944354402378
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
           "eta": 0.01,
           "sigma_sys": 0.005,
           "prior_std": 0.5,
@@ -977,6 +1321,24 @@
           "prior_std": 0.5,
           "beta": null,
           "mse": 0.261056847990534
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.1,
+          "prior_std": 0.1,
+          "beta": null,
+          "mse": 0.2640148764965408
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.025,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.2685830453539217
         },
         {
           "method": "wspf_b",
@@ -1035,6 +1397,24 @@
         {
           "method": "wspf_b",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.01,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.3052949545450243
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.1,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.3127699556581461
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
           "eta": 0.01,
           "sigma_sys": 0.1,
           "prior_std": 0.5,
@@ -1062,11 +1442,65 @@
         {
           "method": "wspf_b",
           "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.01,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.36024547122437295
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.005,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.3618619682838641
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.001,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.4320614074774926
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
           "eta": 0.2,
           "sigma_sys": 0.05,
           "prior_std": 0.1,
           "beta": null,
           "mse": 0.46652575234606836
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.005,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.49578616696143074
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.1,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.629854022618989
+        },
+        {
+          "method": "wspf_b",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.001,
+          "prior_std": 0.5,
+          "beta": null,
+          "mse": 0.6884440505544808
         },
         {
           "method": "wspf_b",
@@ -1421,11 +1855,29 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.005,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.023692011687028596
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.05,
           "sigma_sys": 0.01,
           "prior_std": 0.1,
           "beta": 0.95,
           "mse": 0.02470200899181183
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.005,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.025321462661303733
         },
         {
           "method": "wspf_a",
@@ -1484,11 +1936,146 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.01,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.028181300615800275
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.01,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.028608601936068363
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.025,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.02893890895084247
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.025,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.02901955829685903
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.025,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.03004690262580223
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.001,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.030553615609189917
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.001,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.03076424866391161
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.025,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.0308573804529127
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.01,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.030914747093811003
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.01,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.031265105488265
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.001,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.032509522611799506
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.001,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.032542974020926804
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.05,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.034868512698082665
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.005,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.03658978519240213
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.05,
           "sigma_sys": 0.025,
           "prior_std": 0.1,
           "beta": 0.9,
           "mse": 0.03852166966128967
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.005,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.03853507991102212
         },
         {
           "method": "wspf_a",
@@ -1502,11 +2089,38 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.05,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.04159532907642626
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.01,
           "sigma_sys": 0.05,
           "prior_std": 0.1,
           "beta": 0.95,
           "mse": 0.041797772260206534
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.05,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.04488576934427239
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.05,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.04613749536798712
         },
         {
           "method": "wspf_a",
@@ -1610,6 +2224,15 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.025,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 0.07908696614670309
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.05,
           "sigma_sys": 0.025,
           "prior_std": 0.5,
@@ -1633,6 +2256,15 @@
           "prior_std": 0.5,
           "beta": 0.9,
           "mse": 0.08268698683835199
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.025,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 0.08489632260957782
         },
         {
           "method": "wspf_a",
@@ -1745,6 +2377,15 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.025,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 0.10364321765574525
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.05,
           "sigma_sys": 0.05,
           "prior_std": 0.5,
@@ -1754,11 +2395,29 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.05,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 0.1225818057739884
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.01,
           "sigma_sys": 0.1,
           "prior_std": 0.1,
           "beta": 0.95,
           "mse": 0.12540172354878293
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.05,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 0.12774630682402582
         },
         {
           "method": "wspf_a",
@@ -1777,6 +2436,15 @@
           "prior_std": 0.1,
           "beta": 0.9,
           "mse": 0.1337421428445517
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.025,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 0.14468615573114635
         },
         {
           "method": "wspf_a",
@@ -1808,11 +2476,38 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.05,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 0.1653592339275624
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.05,
           "sigma_sys": 0.1,
           "prior_std": 0.1,
           "beta": 0.9,
           "mse": 0.16552253691518962
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.05,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 0.1667548345394761
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.1,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.16792256642720632
         },
         {
           "method": "wspf_a",
@@ -1889,6 +2584,15 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.1,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.2124643117612753
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.1,
           "sigma_sys": 0.005,
           "prior_std": 0.5,
@@ -1898,11 +2602,29 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.1,
+          "prior_std": 0.1,
+          "beta": 0.95,
+          "mse": 0.245349373609828
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.1,
           "sigma_sys": 0.01,
           "prior_std": 0.5,
           "beta": 0.95,
           "mse": 0.24539322661556265
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.1,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 0.24548986741154627
         },
         {
           "method": "wspf_a",
@@ -1925,11 +2647,29 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.1,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 0.251659366026479
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.1,
           "sigma_sys": 0.005,
           "prior_std": 0.5,
           "beta": 0.95,
           "mse": 0.2518104455850125
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.1,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 0.2521062752999884
         },
         {
           "method": "wspf_a",
@@ -1984,6 +2724,15 @@
           "prior_std": 0.5,
           "beta": 0.9,
           "mse": 0.28569365705002786
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.1,
+          "prior_std": 0.1,
+          "beta": 0.9,
+          "mse": 0.2872227846670858
         },
         {
           "method": "wspf_a",
@@ -2078,6 +2827,24 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.1,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 0.40484453307620455
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.01,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 0.4068116415151209
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.1,
           "sigma_sys": 0.1,
           "prior_std": 0.5,
@@ -2087,11 +2854,74 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.01,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 0.4174574859217266
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.2,
           "sigma_sys": 0.05,
           "prior_std": 0.1,
           "beta": 0.95,
           "mse": 0.461854694798264
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.005,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 0.4737786391317621
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.01,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 0.4812254668291475
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.005,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 0.4940018541730855
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.01,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 0.49635479470040494
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.001,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 0.5199717987644892
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.005,
+          "sigma_sys": 0.001,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 0.5210814228591196
         },
         {
           "method": "wspf_a",
@@ -2177,11 +3007,29 @@
         {
           "method": "wspf_a",
           "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.005,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 0.7101820788403131
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
           "eta": 0.2,
           "sigma_sys": 0.01,
           "prior_std": 0.5,
           "beta": 0.95,
           "mse": 0.7121389588808346
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.005,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 0.719096255485354
         },
         {
           "method": "wspf_a",
@@ -2218,6 +3066,24 @@
           "prior_std": 0.5,
           "beta": 0.95,
           "mse": 0.8005498586542174
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.001,
+          "prior_std": 0.5,
+          "beta": 0.95,
+          "mse": 1.0263436286440613
+        },
+        {
+          "method": "wspf_a",
+          "n_particles": 100,
+          "eta": 0.002,
+          "sigma_sys": 0.001,
+          "prior_std": 0.5,
+          "beta": 0.9,
+          "mse": 1.0359217709149533
         },
         {
           "method": "wspf_a",
@@ -2668,9 +3534,19 @@
           "mse": 0.03228881351645003
         },
         {
+          "eta": 0.005,
+          "prior_std": 0.1,
+          "mse": 0.04392015260525855
+        },
+        {
           "eta": 0.1,
           "prior_std": 0.1,
           "mse": 0.04495506669263344
+        },
+        {
+          "eta": 0.002,
+          "prior_std": 0.1,
+          "mse": 0.07368281291580141
         },
         {
           "eta": 0.05,
@@ -2693,9 +3569,19 @@
           "mse": 0.35566573380346495
         },
         {
+          "eta": 0.005,
+          "prior_std": 0.5,
+          "mse": 0.5989588155779629
+        },
+        {
           "eta": 0.2,
           "prior_std": 0.5,
           "mse": 0.8265395308540676
+        },
+        {
+          "eta": 0.002,
+          "prior_std": 0.5,
+          "mse": 1.09612211928992
         },
         {
           "eta": 0.5,
