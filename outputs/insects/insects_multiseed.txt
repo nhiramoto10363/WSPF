@@ -7,16 +7,16 @@ INSECTS multi-seed experiment (R1-14/R2-1)
   WSPF-A={'eta': 0.2, 'sigma_sys': 0.005, 'prior_std': 0.1, 'beta': 0.9}
   (leak-free: scale fit + select [0,19500), report [19500,end))
 ========================================================================
-  seed 0 done (600s)
-  seed 1 done (601s)
-  seed 2 done (601s)
-  seed 3 done (601s)
-  seed 4 done (601s)
-  seed 5 done (601s)
-  seed 6 done (601s)
-  seed 7 done (601s)
-  seed 8 done (601s)
-  seed 9 done (601s)
+  seed 0 done (599s)
+  seed 1 done (599s)
+  seed 2 done (600s)
+  seed 3 done (600s)
+  seed 4 done (600s)
+  seed 5 done (602s)
+  seed 6 done (602s)
+  seed 7 done (602s)
+  seed 8 done (602s)
+  seed 9 done (602s)
 
   Method         Acc mean±std   macroF1 mean±std    LogLik mean±std
   NoChange     0.2781±0.0000    0.0678±0.0000   -6.1491±0.0000

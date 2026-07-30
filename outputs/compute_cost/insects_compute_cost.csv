@@ -1,0 +1,4 @@
+method,grad_eval_kind,grad_evals_per_step,t_step_ms,t_grad_ms,t_correction_ms,t_loglik_ms,t_weight_ms,t_resample_ms
+PF,batch,100,18.8854,10.3755,2.4175,5.0108,0.9739,0.0998
+WSPF-B,per_sample,1600,45.1209,17.8884,20.7980,5.1670,1.1065,0.1331
+WSPF-A,per_sample,1600,77.5794,18.8036,51.5611,5.2306,1.1840,0.6621
