@@ -124,6 +124,7 @@ def main():
     emit(f"  SGD(独立)={best_sgd}, σ_obs={noise_std:.4f}")
     emit(f"  (HP selected on zone {GE.ZONES[0]}, report = ts >= "
          f"{GE.SELECT_END_TS})")
+    emit("  改善符号: improvement over PF (%) = 100·(MSE_PF−MSE_alt)/MSE_PF, 正=改善")
     emit("=" * 72)
 
     jobs = [(z, s) for z in GE.ZONES for s in SEEDS_MULTI]
@@ -141,7 +142,7 @@ def main():
         per_seed = per_zone_seed[zone]
         emit(f"\n===== Zone {zone} — Matched-HP (report region) =====")
         emit(f"  {'Method':<10s} {'MSE mean±std':>20s} "
-             f"{'MAE mean':>10s} {'vs PF %':>9s} {'paired-t p':>11s} "
+             f"{'MAE mean':>10s} {'improve/PF%':>11s} {'paired-t p':>11s} "
              f"{'Wilcoxon p':>11s}")
         pf_mse = [per_seed[s]["PF"]["mse"] for s in SEEDS_MULTI]
         for m in METHODS:
