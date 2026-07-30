@@ -4,13 +4,13 @@ Matched-HP experiment — Email (R1-7)
 ========================================================================
   samples=1500, features=50, PCA_FIT_END=600, REPORT_START=600
 
-  N=100: (η,σcd,σ0)={'eta': 1.5, 'sigma_sys': 0.1, 'prior_std': 0.5} [grid best_pf], WSPF-A β=0.9
+  N=100: (η,σcd,σ0)={'eta': 3.0, 'sigma_sys': 0.075, 'prior_std': 0.25} [grid best_pf], WSPF-A β=0.95, SGD(独立)η=2.0
 
   === Matched-HP results (N=100, reported on periods 3-5) ===
   Method       Accuracy         F1    Log-Lik   F1 vs PF
   ------------------------------------------------------
   NoChange       0.5544     0.2907    -3.0787          -
-  SGD            0.7344     0.6804    -0.7066          -
-  PF             0.7078     0.6551    -0.8594          -
-  WSPF-A         0.6690     0.6046    -0.8089    -0.0505
-  WSPF-B         0.6806     0.6280    -0.7630    -0.0271
+  SGD            0.7928     0.7589    -0.6275          -
+  PF             0.7604     0.7233    -0.8416          -
+  WSPF-A         0.7228     0.6747    -1.0997    -0.0486
+  WSPF-B         0.7286     0.6820    -0.9102    -0.0413

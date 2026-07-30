@@ -3,14 +3,14 @@ Email binary classification results
 ======================================================================
 
 N_Particles = 100
-  PF:    eta=1.5, sigma_sys=0.1, prior_std=0.5
+  PF:    eta=3.0, sigma_sys=0.075, prior_std=0.25
   WSPF-B: eta=1.5, sigma_sys=0.025, prior_std=0.1
-  WSPF-A: eta=1.5, sigma_sys=0.025, prior_std=0.1, beta=0.9
+  WSPF-A: eta=2.0, sigma_sys=0.005, prior_std=0.1, beta=0.95
   Method       Accuracy         F1    Log-Lik
   ----------------------------------------------
   NoChange       0.5544     0.2907    -3.0787
-  SGD            0.7344     0.6804    -0.7066
-  PF             0.7078     0.6551    -0.8594
-  WSPF-A         0.7593     0.7231    -0.7060
+  SGD            0.7928     0.7589    -0.6275
+  PF             0.7604     0.7233    -0.8416
+  WSPF-A         0.7928     0.7551    -0.6316
   WSPF-B         0.7778     0.7493    -0.6639
 
