@@ -1,0 +1,47 @@
+# ======================================================================
+# Regression (レジーム切替回帰) ベンチマーク設定
+#   本文の主結果。既知の急激な反復ドリフト。Oracle(R1-5)対象。
+# ======================================================================
+benchmark: regression
+task_type: regression
+
+# --- データ生成 ---
+data:
+  input_dim: 1
+  hidden_dim: 8            # param_dim = (1+1)*8 + (8+1)*1 = 25
+  T: 500
+  batch_size: 16
+  test_size: 200
+  noise_std: 0.5           # 観測ノイズ σ_obs (予測区間 y=f+ε に使用, R2-5)
+  within_regime_drift: 0.0005
+  grad_clip_norm: 5.0
+  switch_points: [100, 200, 300, 400]
+
+# --- 手法 ---
+methods: [SGD, PH-SGD, Window-SGD, PF, WSPF-A, WSPF-B]
+oracle: true               # Regression のみ Oracle を実行 (R1-5)
+
+# --- 粒子数 (R2-2) ---
+n_particles:
+  main: 100                # 主結果
+  sweep: [25, 50, 100, 200, 400]   # 主分析は N=100 のHPを固定
+
+# --- シード (選択と評価を分離) ---
+seeds:
+  selection: [1000, 1001, 1002]    # 選択区間で3シード平均(選択の安定化)
+  evaluation: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]   # 評価は10シード
+
+# --- グリッドサーチ範囲 (端点は自動拡張規則で処理) ---
+grid:
+  eta: [0.01, 0.1, 0.2, 0.3, 0.4, 0.5]
+  sigma_sys: [0.01, 0.05, 0.1, 0.15, 0.2]
+  prior_std: [0.01, 0.1, 0.2, 0.3, 0.5]
+  beta: [0.8, 0.9, 0.95, 0.99]     # WSPF-A 専用
+
+# --- 評価 ---
+eval:
+  eval_start: 50
+  post_switch_lag: 10      # 切替後 N ステップを post-switch とする
+  coverage_levels: [0.5, 0.8, 0.9, 0.95]
+
+output_dir: outputs/regression

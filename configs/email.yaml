@@ -1,0 +1,52 @@
+# ======================================================================
+# Email (Elist) ベンチマーク設定  —  Appendix
+#   半合成的な反復ドリフト・ベンチマーク(テキスト特徴は実データ、
+#   概念はトピックラベル反転で人工的に設定)であることを明記する(R1-14)。
+#   R1-12 プロトコル修正・R1-13 リーク除去済み。
+# ======================================================================
+benchmark: email
+task_type: classification          # 二値分類
+semisynthetic: true                # Appendix で明記
+
+# --- データ ---
+data:
+  arff_path: Email/email_data.arff
+  pca_dim: 50                      # PCA 次元削減 (fit は pca_fit_end まで)
+  pca_fit_end: 600                 # PCA 学習に使う観測の終端(リーク除去, R1-13)
+  report_start: 600                # 評価に用いる区間の開始
+  hidden_dim: 16                   # param_dim = (50+1)*16 + (16+1)*1 = 833
+  batch_size: 16
+  test_size: 32
+  grad_clip_norm: 5.0
+  drift_points: [300, 600, 900, 1200]   # straddle 判定に使用 (R1-12)
+
+# --- 手法 ---
+methods: [NoChange, SGD, PH-SGD, Window-SGD, PF, WSPF-A, WSPF-B]
+oracle: false
+
+# --- 粒子数 ---
+n_particles:
+  main: 100
+  sweep: [25, 50, 100, 200, 400]
+
+# --- シード ---
+seeds:
+  selection: [1000, 1001, 1002]
+  evaluation: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+# --- グリッドサーチ範囲 ---
+grid:
+  eta: [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
+        1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
+  sigma_sys: [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2]
+  prior_std: [0.01, 0.1, 0.25, 0.5, 0.75, 1.0]
+  beta: [0.1, 0.3, 0.5, 0.9, 0.95]
+
+# --- 評価 ---
+eval:
+  report_start: 600
+  # straddle ブロックは全体 Accuracy/F1 には含めるが post-switch 分析からは除外
+  metrics: [accuracy, f1, balanced_accuracy, nll, brier, ece]
+  pos_label: 1.0
+
+output_dir: outputs/email

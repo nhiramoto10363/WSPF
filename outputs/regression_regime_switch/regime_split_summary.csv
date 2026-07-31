@@ -1,5 +1,0 @@
-n_particles,method,post_switch_mse_mean,post_switch_mse_std,stable_mse_mean,stable_mse_std
-100,SGD,0.828338,0.589067,0.288036,0.013799
-100,PF,0.536216,0.283449,0.290248,0.006074
-100,WSPF-A,0.456680,0.193283,0.293067,0.003539
-100,WSPF-B,0.456201,0.177915,0.296376,0.004204

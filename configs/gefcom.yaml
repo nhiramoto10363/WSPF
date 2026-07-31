@@ -1,0 +1,52 @@
+# ======================================================================
+# GEFCom2014 Solar ベンチマーク設定
+#   本文の大規模実データ結果 (R2-1)。季節的な漸進ドリフト(人工切替なし)。
+#   隠れ層を 64 に拡大し param_dim = (14+1)*64 + (64+1)*1 = 1025 > 833。
+# ======================================================================
+benchmark: gefcom
+task_type: regression
+
+# --- データ ---
+data:
+  predictors_path: GEFCom2014/Solar/predictors15.csv
+  train_path: null
+  zones: [1, 2, 3]
+  select_end_ts: "2012-10-01"     # 選択区間の終端(リーク除去, R1-13)
+  input_dim: 14                    # 12 NWP + hour sin/cos
+  hidden_dim: 64                   # d = 1025 (R2-1: d > 833)
+  batch_size: 16
+  test_size: 32
+  noise_std: null                  # グリッドサーチで決定 (grid.noise_std)
+  grad_clip_norm: 5.0
+  switch_points: []                # 人工的な切替点は設定しない
+
+# --- 手法 ---
+methods: [SGD, PH-SGD, Window-SGD, PF, WSPF-A, WSPF-B]
+oracle: false                      # Oracle は Regression のみ
+
+# --- 粒子数 (R2-2) ---
+n_particles:
+  main: 100
+  sweep: [25, 50, 100, 200, 400]
+
+# --- シード ---
+seeds:
+  selection: [1000, 1001, 1002]
+  evaluation: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+# --- グリッドサーチ範囲 ---
+grid:
+  eta: [0.002, 0.005, 0.01, 0.05, 0.1, 0.2, 0.5, 1.0]
+  sigma_sys: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1]
+  prior_std: [0.1, 0.5]
+  beta: [0.9, 0.95]
+  noise_std: [0.05, 0.1, 0.2]      # ガウス尤度の観測ノイズ
+
+# --- 評価 ---
+eval:
+  monthly: true                    # 月別性能推移で報告(回復曲線の代替)
+  coverage_levels: [0.5, 0.8, 0.9, 0.95]
+  # R2-1 stream-length スケーリング: 累積実行時間を報告
+  stream_length_checkpoints: [500, 1000, 2000, -1]   # -1 = 全ステップ
+
+output_dir: outputs/gefcom

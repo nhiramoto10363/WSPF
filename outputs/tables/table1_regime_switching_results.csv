@@ -1,5 +1,0 @@
-Method,Test MSE Mean,Test MSE SD,Relative Improvement vs PF (%),Rank
-SGD,0.3326,0.0494,1.5,3
-PF,0.3376,0.0369,0.0,4
-WSPF-B,0.3135,0.0175,7.1,2
-WSPF-A,0.3056,0.0233,9.5,1
