@@ -84,6 +84,8 @@ def compute_correction_method_a(epsilon, xi_hat, deviations, eta,
         log_correction が非有限になり中立値 0 でガードした粒子数(通常 0)
     cond_M : ndarray, shape (N,)
         各粒子の M = I_B + c⁻¹αWW^T の条件数(数値安定性の監視用)
+    jitter_count : int
+        Cholesky が失敗し jitter fallback を要した粒子数(通常 0)
     """
     N, B, dd = deviations.shape
     c = sigma_sys_sq
@@ -100,19 +102,32 @@ def compute_correction_method_a(epsilon, xi_hat, deviations, eta,
     # p = √α W v  (N, B)
     p = np.sqrt(alpha) * np.einsum("nbd,nd->nb", deviations, v)
 
-    # Cholesky（失敗時のみ jitter を追加）
+    # Cholesky（失敗時のみ、失敗した粒子だけに jitter を追加）
+    # 高速な batched パスをまず試し、失敗時のみ粒子ごとのループに落として
+    # jitter が必要だった粒子数 (jitter_count) を数える。
+    jitter_count = 0
     try:
         L = np.linalg.cholesky(M)
     except np.linalg.LinAlgError:
-        M[:, diag, diag] += 1e-8
-        L = np.linalg.cholesky(M)
+        L = np.empty_like(M)
+        for i in range(N):
+            try:
+                L[i] = np.linalg.cholesky(M[i])
+            except np.linalg.LinAlgError:
+                # この粒子のみ jitter を追加して再試行
+                jit = 1e-8 * np.mean(np.diagonal(M[i]))
+                M[i, diag, diag] += jit
+                L[i] = np.linalg.cholesky(M[i])
+                jitter_count += 1
 
     # log|M| = 2 Σ log diag(L)。対角は条件数近似にも再利用する。
     Ldiag = np.diagonal(L, axis1=1, axis2=2)  # (N, B)
     logdet_M = 2.0 * np.sum(np.log(Ldiag), axis=1)  # (N,)
 
-    # M⁻¹ p を Cholesky 経由で解く
-    z = np.linalg.solve(M, p[:, :, None])[:, :, 0]  # (N, B)
+    # M⁻¹ p を、log|M| と同一の Cholesky 因子 L を再利用して解く
+    # (M = L Lᵀ の前進・後退代入)。solve(M, ...) を再計算しない。
+    u = np.linalg.solve(L, p[:, :, None])                      # (N, B, 1)
+    z = np.linalg.solve(np.swapaxes(L, -1, -2), u)[:, :, 0]    # (N, B)
     pMp = np.sum(p * z, axis=1)  # pᵀ M⁻¹ p  (N,)
 
     v_norm_sq = np.sum(v ** 2, axis=1)  # (N,)
@@ -140,7 +155,7 @@ def compute_correction_method_a(epsilon, xi_hat, deviations, eta,
     log_correction = np.where(finite, log_correction_raw, 0.0)
     nonfinite_count = int(np.sum(~finite))
 
-    return log_correction, rho, nonfinite_count, cond_M
+    return log_correction, rho, nonfinite_count, cond_M, jitter_count
 
 
 # ================================================================
@@ -240,6 +255,7 @@ class WSPF_A:
             # --- WSPF-A 固有: 行列反転の条件数監視 (R1-10) ---
             "cond_M_mean": [],
             "cond_M_max": [],
+            "jitter_count": [],
             # --- 計算コスト計測 (R1-11) ---
             "t_step": [],
             "t_grad": [],            # per-sample 勾配評価の時間 [s]
@@ -312,7 +328,7 @@ class WSPF_A:
 
         # 5) 補正項 (Method A, 行列版; ここに Woodbury/Cholesky/logdet が入る)
         (log_correction, rho, logcorr_nonfinite_count,
-         cond_M) = compute_correction_method_a(
+         cond_M, jitter_count) = compute_correction_method_a(
             epsilon, xi_hat, deviations, self.eta,
             self.sigma_sys_sq, self.param_dim,
         )
@@ -376,6 +392,7 @@ class WSPF_A:
         self.history["logcorr_nonfinite_count"].append(logcorr_nonfinite_count)
         self.history["cond_M_mean"].append(float(np.mean(cond_M)))
         self.history["cond_M_max"].append(float(np.max(cond_M)))
+        self.history["jitter_count"].append(jitter_count)
         # 計算コスト (R1-11)
         self.history["t_grad"].append(_t_grad - _t0)
         self.history["t_correction"].append(_t_corr - _t_grad)

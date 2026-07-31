@@ -75,7 +75,8 @@ class RegressionSwitchBenchmark(Benchmark):
 
     def __init__(self, T=500, batch_size=16, test_size=200, noise_std=0.5,
                  hidden_dim=8, input_dim=1, within_regime_drift=0.0005,
-                 grad_clip_norm=5.0, oracle_samples=ORACLE_SAMPLES):
+                 grad_clip_norm=5.0, oracle_samples=ORACLE_SAMPLES,
+                 eval_start=50):
         self.T = int(T)
         self.batch_size = int(batch_size)
         self.test_size = int(test_size)
@@ -83,8 +84,12 @@ class RegressionSwitchBenchmark(Benchmark):
         self.hidden_dim = int(hidden_dim)
         self.input_dim = int(input_dim)
         self.within_regime_drift = float(within_regime_drift)
-        self.grad_clip_norm = float(grad_clip_norm)
+        # None なら勾配クリッピング無効(Oracle/R1-6 の整合用)
+        self.grad_clip_norm = None if grad_clip_norm is None else float(grad_clip_norm)
         self.oracle_samples = int(oracle_samples)
+        # 選択区間(ウォームアップ): step < eval_start は HP選択にも最終評価にも
+        # スコア集計しない(連続に処理はする)。R1-13。
+        self.eval_start = int(eval_start)
 
         # モデルは 1 つ生成して使い回す (param_dim をここで確定)
         self.model = NeuralNetRegression(self.input_dim, self.hidden_dim,
@@ -254,8 +259,12 @@ class RegressionSwitchBenchmark(Benchmark):
                 test_indices=np.empty(0, int),
                 test_before_train=True,
                 regime_id=int(regime_ids[t]),
+                # 選択区間(ウォームアップ)と報告区間を分離(R1-13)
+                is_selection_step=(t < self.eval_start),
+                is_report_step=(t >= self.eval_start),
                 # 合成タスクでは train/test を θ*_t から独立生成するため
-                # test ブロックが切替点をまたぐことはない。切替ステップ
-                # ちょうどの t を post-switch 除外の目印として True にする。
-                straddles_switch=(t in switch_times),
+                # test ブロックは切替点を「またがない」→ straddles_switch=False。
+                # 切替時点そのものは is_switch_step で示す(全体集計から除外しない)。
+                straddles_switch=False,
+                is_switch_step=(t in switch_times),
             )

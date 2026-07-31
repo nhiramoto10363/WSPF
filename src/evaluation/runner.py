@@ -51,8 +51,13 @@ SEED_OFFSET = {
 # ======================================================================
 # 推定器の生成(method 文字列でディスパッチ)
 # ======================================================================
-def _build_estimator(method, benchmark, n_particles, params, seed, funcs):
-    """method に応じた推定器を生成して返す。"""
+def _build_estimator(method, benchmark, n_particles, params, seed, funcs,
+                     filter_seed=None):
+    """method に応じた推定器を生成して返す。
+
+    filter_seed を指定すると、method 別オフセットの代わりにその値を
+    フィルタ/初期化シードに使う(Oracle 比較の共通乱数 CRN 用)。
+    """
     d = benchmark.param_dim
     eta = params["eta"]
     # sigma_sys(σ_cd)は粒子フィルタのみ必須。点推定ベースラインは持たない。
@@ -61,7 +66,7 @@ def _build_estimator(method, benchmark, n_particles, params, seed, funcs):
     prior_mean = params.get("prior_mean", 0.0)
     ess_ratio = params.get("ess_resample_ratio", 0.5)
     grad_clip = getattr(benchmark, "grad_clip_norm", None)
-    fseed = seed + SEED_OFFSET[method]
+    fseed = (seed + SEED_OFFSET[method]) if filter_seed is None else filter_seed
 
     if method == "PF":
         return ParticleFilter(
@@ -121,7 +126,7 @@ def _predict_particles_weights(method, estimator):
 # メインの実行関数
 # ======================================================================
 def run_method(method, benchmark, n_particles, params, seed,
-               collect_diagnostics=True):
+               collect_diagnostics=True, filter_seed=None):
     """
     1 メソッド × 1 シードを prequential ループで駆動する。
 
@@ -143,11 +148,16 @@ def run_method(method, benchmark, n_particles, params, seed,
     -------
     dict {
       "metrics": {metric_name: (T,) ndarray},
-      "straddle_mask": (T,) bool,
+      "straddle_mask": (T,) bool,    # ブロックが切替をまたぐ(全体集計に含めてよい)
+      "switch_mask": (T,) bool,      # 既知の切替時点そのもの(回復解析の起点)
+      "selection_mask": (T,) bool,   # 選択区間(HP選択の集計対象)
+      "report_mask": (T,) bool,      # 報告区間(最終評価の集計対象)
       "history": dict or None,
       "n_resets": int,
       "regime_ids": (T,) int,
       "step_index": (T,) int,
+      "predictions": {"y",("mean","std")|("probs")},  # report 区間サンプル単位
+      "train_indices": list[ndarray], "test_indices": list[ndarray],
     }
     """
     if method not in ALL_METHODS:
@@ -164,17 +174,24 @@ def run_method(method, benchmark, n_particles, params, seed,
     levels = (0.5, 0.8, 0.9, 0.95)
 
     estimator = _build_estimator(method, benchmark, n_particles, params,
-                                 seed, funcs)
+                                 seed, funcs, filter_seed=filter_seed)
 
     # Oracle 用: per-step の真統計クロージャを供給する関数(回帰のみ)
     oracle_hook = getattr(benchmark, "oracle_stats_fn_for_step", None)
-    oracle_rng = np.random.default_rng(seed + SEED_OFFSET.get(method, 0) + 100)
+    _oseed = (seed + SEED_OFFSET.get(method, 0)) if filter_seed is None else filter_seed
+    oracle_rng = np.random.default_rng(_oseed + 100)
 
     # 指標バッファ
     metric_lists = {}
     straddle = []
+    switch = []
+    selection = []
+    report = []
     regime_ids = []
     step_indices = []
+    # 予測・診断保存用 (P6, R2-5): report 区間のサンプル単位を蓄積
+    rep_y, rep_mean, rep_std, rep_probs = [], [], [], []
+    train_idx_list, test_idx_list = [], []
 
     def _push(name, val):
         metric_lists.setdefault(name, []).append(float(val))
@@ -201,6 +218,10 @@ def run_method(method, benchmark, n_particles, params, seed,
                     _push(f"coverage_{lvl:.2f}", cw[lvl]["coverage"])
                     _push(f"width_{lvl:.2f}", cw[lvl]["width"])
                 primary_err = M.test_mse(yte_arr, pred_mean)
+                if stp.is_report_step:
+                    rep_y.append(yte_arr)
+                    rep_mean.append(np.asarray(pred_mean, np.float64).ravel())
+                    rep_std.append(np.asarray(pred_std, np.float64).ravel())
             else:
                 # 分類: predict_fn は確率(あるいは logit)。[0,1] 外は sigmoid。
                 probs = pred_mean
@@ -213,6 +234,9 @@ def run_method(method, benchmark, n_particles, params, seed,
                 _push("nll", M.nll_bernoulli(probs, yte_arr))
                 _push("brier", float(np.mean((probs - yte_arr) ** 2)))
                 primary_err = 1.0 - M.accuracy(hard, yte_arr)
+                if stp.is_report_step:
+                    rep_probs.append(np.asarray(probs, np.float64).ravel())
+                    rep_y.append(yte_arr)
         else:
             # test ブロックが空: NaN を記録して整列を保つ
             if is_reg:
@@ -227,8 +251,13 @@ def run_method(method, benchmark, n_particles, params, seed,
             primary_err = None
 
         straddle.append(bool(stp.straddles_switch))
+        switch.append(bool(getattr(stp, "is_switch_step", False)))
+        selection.append(bool(getattr(stp, "is_selection_step", False)))
+        report.append(bool(getattr(stp, "is_report_step", True)))
         regime_ids.append(-1 if stp.regime_id is None else int(stp.regime_id))
         step_indices.append(int(stp.step_index))
+        train_idx_list.append(np.asarray(stp.train_indices, int))
+        test_idx_list.append(np.asarray(stp.test_indices, int))
 
         # -------- 2) 更新(学習) --------
         if method in SGD_METHODS:
@@ -257,13 +286,30 @@ def run_method(method, benchmark, n_particles, params, seed,
     if collect_diagnostics and method in FILTER_METHODS:
         history = estimator.get_history()
 
+    # report 区間のサンプル単位予測(較正・回復・保存用, R2-5/P6)
+    def _cat(lst):
+        return np.concatenate(lst) if lst else np.empty(0, np.float64)
+
+    predictions = {"y": _cat(rep_y)}
+    if is_reg:
+        predictions["mean"] = _cat(rep_mean)
+        predictions["std"] = _cat(rep_std)
+    else:
+        predictions["probs"] = _cat(rep_probs)
+
     return {
         "metrics": metrics_out,
         "straddle_mask": np.asarray(straddle, dtype=bool),
+        "switch_mask": np.asarray(switch, dtype=bool),
+        "selection_mask": np.asarray(selection, dtype=bool),
+        "report_mask": np.asarray(report, dtype=bool),
         "history": history,
         "n_resets": int(getattr(estimator, "n_resets", 0)),
         "regime_ids": np.asarray(regime_ids, dtype=int),
         "step_index": np.asarray(step_indices, dtype=int),
+        "predictions": predictions,
+        "train_indices": train_idx_list,
+        "test_indices": test_idx_list,
     }
 
 

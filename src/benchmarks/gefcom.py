@@ -4,9 +4,16 @@
 ベンチマーク: GEFCom2014-S 太陽光発電予測 (GEFCom)
 
 実世界の点予測回帰タスク。既知のスイッチ点はなく、漸進的な季節ドリフトを持つ
-(regression sim / INSECTS の abrupt と相補的)。prequential sliding window で
-train B → test TEST を評価し、pos += B で前進する
-(旧 `experiments/gefcom_experiment.py` に準拠)。
+(regression sim / INSECTS の abrupt と相補的)。
+
+プロトコル: **重複しない同一ブロック** prequential test-then-train。
+各ブロック B_t = [pos:pos+B] を、更新前モデル θ_{t-1} で予測(=one-step-ahead
+forecast)してから同じブロックで学習し、pos += B で前進する。旧実装は
+test 窓(TEST=32)を train 窓(B=16)より後ろに重ねて取り、隣接ブロックが
+重複していたが、説明の明快さを優先して Email と同じ非重複プロトコルに統一した。
+
+選択区間(select_end_ts より前)と報告区間を、タイムスタンプで分離する
+(グリッド探索・最終評価とも同じ全ストリームを連続処理し、集計だけ分ける, R1-13)。
 
 R2-1 修正方針: param_dim を大きくして WSPF-A のランク B 近似の効果を検証する
 ため、hidden_dim の既定を 64 とする
@@ -54,7 +61,7 @@ class GefcomBenchmark(Benchmark):
         self.batch_size = int(batch_size)
         self.test_size = int(test_size)
         self.noise_std = float(noise_std)
-        self.grad_clip_norm = float(grad_clip_norm)
+        self.grad_clip_norm = None if grad_clip_norm is None else float(grad_clip_norm)
 
         # ローダー読込 (データ欠損時はここで例外。import は失敗しない)
         self.loader = GefcomSolarLoader(
@@ -102,22 +109,30 @@ class GefcomBenchmark(Benchmark):
     def stream(self, seed: int):
         X, y = self.loader.X, self.loader.y
         n = len(X)
-        B, TEST = self.batch_size, self.test_size
+        B = self.batch_size
+        # select_mask[i] = True なら i は選択区間(ts < select_end_ts)
+        sel_mask = np.asarray(getattr(self.loader, "select_mask",
+                                      np.zeros(n, bool)))
         pos = 0
         step_index = 0
-        while pos + B + TEST <= n:
-            tr = np.arange(pos, pos + B)
-            te = np.arange(pos + B, pos + B + TEST)
+        while pos + B <= n:
+            blk = np.arange(pos, pos + B)     # 同一ブロック(非重複)
+            # ブロック全体が選択区間 / 報告区間のどちらに入るか
+            in_sel = bool(sel_mask[blk].all())
+            in_rep = bool((~sel_mask[blk]).all())
             yield StreamStep(
                 step_index=step_index,
-                X_train=X[tr],
-                y_train=y[tr],
-                X_test=X[te],
-                y_test=y[te],
-                train_indices=tr,
-                test_indices=te,
+                X_train=X[blk],
+                y_train=y[blk],
+                X_test=X[blk],
+                y_test=y[blk],
+                train_indices=blk,
+                test_indices=blk,
                 test_before_train=True,
+                is_selection_step=in_sel,
+                is_report_step=in_rep,
                 straddles_switch=False,
+                is_switch_step=False,
                 regime_id=None,
             )
             pos += B

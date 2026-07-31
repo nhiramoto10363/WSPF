@@ -56,11 +56,10 @@ def main():
             best, score = grid_search(m, cfg, n, sel)
             result["by_n_particles"][str(n)][m] = best
 
-    # 点推定ベースライン(N を持たない): N=main で選択
+    # 点推定ベースライン(N を持たない): N=main で選択。
+    # Oracle は独立グリッドサーチ不要(run_oracle.py が WSPF-A の HP を共有する)。
     base_methods = [m for m in cfg["methods"]
                     if m in ("SGD", "PH-SGD", "Window-SGD")]
-    if cfg.get("oracle"):
-        base_methods = base_methods + ["Oracle"]
     print("[baselines (no N)]")
     for m in base_methods:
         best, score = grid_search(m, cfg, n_main, sel)

@@ -20,7 +20,7 @@ import os
 import numpy as np
 
 from _common import (load_config, resolve_seeds, build_benchmark,
-                     load_selected, get_params)
+                     load_selected, get_params, region_mask)
 from src.evaluation import (run_seeds, save_run_dir, mean_std,
                             summarize_history, timing_report)
 
@@ -54,8 +54,7 @@ def main():
             results = run_seeds(m, bench, n, params, eval_seeds)
             vals, ess_frac, resamp = [], [], []
             for r in results:
-                mask = ~r.get("straddle_mask",
-                              np.zeros_like(r["metrics"][key], bool))
+                mask = region_mask(r, "report")
                 vals.append(np.nanmean(np.asarray(r["metrics"][key])[mask]))
                 if r.get("history"):
                     d = summarize_history(r["history"])

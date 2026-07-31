@@ -11,8 +11,12 @@ R1-12 プロトコル: prequential test-then-train を **同一ブロック** �
   1. 更新前の推定 θ_{t-1} で評価し、
   2. 同じブロック B_t で学習し、
   3. 次のブロックへ進む (pos += B, 非重複)。
-これにより各観測は「学習前に 1 回評価 → その後 1 回学習」となり、
-評価と学習でのデータ重複・再利用が起きない。
+これにより各観測は学習に使われる前に厳密に 1 回だけ評価され、
+test ブロックはステップ間で重複しない
+(Each observation is evaluated exactly once before it is used for training,
+and test blocks do not overlap across steps)。
+なお同一ブロックを評価後に学習へ使う設計なので、「評価と学習が一切重ならない」
+という意味ではない点に注意する。
 
 R1-12 straddle: ブロックがドリフト点をまたぐ (block 内で概念が切り替わる)
 場合は straddles_switch=True とし、全体 Accuracy/F1 には含めてよいが
@@ -54,15 +58,18 @@ class EmailBenchmark(Benchmark):
 
     def __init__(self, arff_path=_DEFAULT_ARFF, pca_dim=50, pca_fit_end=600,
                  hidden_dim=16, batch_size=16, test_size=32,
-                 grad_clip_norm=5.0, seed=42):
+                 grad_clip_norm=5.0, seed=42, report_start=600):
         self.arff_path = arff_path
         self.pca_dim = int(pca_dim)
         self.pca_fit_end = int(pca_fit_end)
         self.hidden_dim = int(hidden_dim)
         self.batch_size = int(batch_size)
         self.test_size = int(test_size)
-        self.grad_clip_norm = float(grad_clip_norm)
+        self.grad_clip_norm = None if grad_clip_norm is None else float(grad_clip_norm)
         self.loader_seed = int(seed)
+        # 報告区間の開始インデックス。これより前(選択区間)は最終評価に
+        # 集計しない(PCA fit と同様のリーク除去, R1-13)。
+        self.report_start = int(report_start)
 
         # ローダー読込 (データ欠損時はここで例外。import は失敗しない)
         self.loader = EmailDataLoader(
@@ -126,6 +133,9 @@ class EmailBenchmark(Benchmark):
             straddles = any(pos < d < pos + B for d in DRIFT_POINTS)
             regime_id = self._period_of(pos)
 
+            # 選択区間(report_start より前)と報告区間を分離(R1-13)
+            in_rep = (pos >= self.report_start)
+
             # 評価も学習も同一ブロック: θ_{t-1} で評価 → B_t で学習
             yield StreamStep(
                 step_index=step_index,
@@ -136,7 +146,10 @@ class EmailBenchmark(Benchmark):
                 train_indices=blk,
                 test_indices=blk,
                 test_before_train=True,
+                is_selection_step=(not in_rep),
+                is_report_step=in_rep,
                 straddles_switch=straddles,
+                is_switch_step=straddles,
                 regime_id=regime_id,
             )
             pos += B

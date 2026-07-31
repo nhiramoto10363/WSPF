@@ -47,10 +47,22 @@ class StreamStep:
         元データにおけるグローバルインデックス(リーク検査・再現用, R1-12/R1-13)。
     test_before_train : bool
         評価が学習より前かどうか(prequential では True)。
+    is_selection_step : bool
+        このステップが選択区間(ウォームアップ/HP選択用)に属するか。
+        グリッドサーチのスコアはこのマスクだけで集計する(R1-13 リーク除去)。
+    is_report_step : bool
+        このステップが報告区間(最終評価用)に属するか。
+        最終評価のスコアはこのマスクだけで集計する。
+        選択区間と報告区間は連続に処理し(再初期化しない)、集計だけを分ける。
     straddles_switch : bool
-        この test ブロックが概念切替点をまたぐか。
+        この test ブロックが概念切替点を **またぐ**(ブロック内で概念が変わる)か。
         True のブロックは全体集計には含めてよいが、
         stable / post-switch 分析からは除外する(R1-12)。
+        ※ 合成回帰のように test を独立生成する場合、切替時点でも
+          ブロックはまたがないので False。切替時点そのものは is_switch_step で示す。
+    is_switch_step : bool
+        このステップが既知の概念切替時点そのものか(post-switch 回復解析の起点)。
+        straddles_switch とは区別する(切替時点を全体集計から誤って除外しない)。
     regime_id : Optional[int]
         現在のレジーム識別子(切替のあるベンチマークのみ)。
     """
@@ -63,7 +75,10 @@ class StreamStep:
     train_indices: np.ndarray = field(default_factory=lambda: np.empty(0, int))
     test_indices: np.ndarray = field(default_factory=lambda: np.empty(0, int))
     test_before_train: bool = True
+    is_selection_step: bool = False
+    is_report_step: bool = True
     straddles_switch: bool = False
+    is_switch_step: bool = False
     regime_id: Optional[int] = None
 
 

@@ -21,7 +21,7 @@ import os
 import numpy as np
 
 from _common import (load_config, resolve_seeds, build_benchmark,
-                     load_selected, get_params)
+                     load_selected, get_params, region_mask)
 from src.evaluation import run_seeds, save_run_dir, mean_std
 
 FILTER_METHODS = ["PF", "WSPF-A", "WSPF-B"]
@@ -50,9 +50,7 @@ def main():
             bench = build_benchmark(cfg)
             results = run_seeds(m, bench, n, params, eval_seeds)
             vals = [np.nanmean(np.asarray(r["metrics"][key])[
-                        ~r.get("straddle_mask",
-                               np.zeros_like(r["metrics"][key], bool))])
-                    for r in results]
+                        region_mask(r, "report")]) for r in results]
             mu, sd = mean_std(vals)
             rows.append({"shared_from": fixed, "method": m,
                          "metric": key, "mean": mu, "std": sd})

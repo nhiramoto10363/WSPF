@@ -59,7 +59,7 @@ def _make_case(N=6, B=5, d=4, c=0.05, eta=0.1, seed=0):
 def test_lowrank_matches_dense():
     """(1)(3)(4) log correction / log-det / 二次形式が dense と一致。"""
     epsilon, xi_hat, deviations, eta, c, d = _make_case()
-    logR, rho, nonfinite, cond_M = compute_correction_method_a(
+    logR, rho, nonfinite, cond_M, jitter = compute_correction_method_a(
         epsilon, xi_hat, deviations, eta, c, d
     )
     logR_ref, logdet_ref, quadp_ref, ranks = _dense_reference(
@@ -87,7 +87,7 @@ def test_finite_for_small_sigma_cd():
     """(5) σ_cd が小さくても有限。"""
     epsilon, xi_hat, deviations, eta, _, d = _make_case(c=0.05)
     for c in [1e-3, 1e-5, 1e-8]:
-        logR, rho, nonfinite, cond_M = compute_correction_method_a(
+        logR, rho, nonfinite, cond_M, jitter = compute_correction_method_a(
             epsilon, xi_hat, deviations, eta, c, d
         )
         assert np.all(np.isfinite(logR)), f"σ_cd²={c} で非有限"
@@ -95,22 +95,26 @@ def test_finite_for_small_sigma_cd():
 
 
 def test_jitter_fallback_and_nonfinite_count():
-    """(6)(7) 特異に近い M でも Cholesky が jitter fallback し、
-    非有限カウントが int で返る。"""
-    # 偏差をほぼ同一にして M を悪条件化
-    N, B, d, c, eta = 3, 4, 5, 1e-10, 1.0
+    """(6)(7) 特異な M で Cholesky が jitter fallback を実際に発火させ、
+    jitter_count > 0 を返しつつ log_correction が有限に保たれること。"""
+    # 極小 c と大きな近似重複偏差により α c⁻¹ W W^T を巨大・悪条件化し、
+    # batched Cholesky を数値的に失敗させて per-particle jitter を強制する。
+    N, B, d, c, eta = 3, 4, 5, 1e-30, 1.0
     rng = np.random.default_rng(1)
     base = rng.normal(size=(N, 1, d))
-    deviations = base + 1e-12 * rng.normal(size=(N, B, d))
+    deviations = base + 1e-4 * rng.normal(size=(N, B, d))
     deviations -= deviations.mean(axis=1, keepdims=True)
     epsilon = rng.normal(size=(N, d))
     xi_hat = rng.normal(size=(N, d))
-    logR, rho, nonfinite, cond_M = compute_correction_method_a(
+    logR, rho, nonfinite, cond_M, jitter = compute_correction_method_a(
         epsilon, xi_hat, deviations, eta, c, d
     )
     assert isinstance(nonfinite, int)
+    assert isinstance(jitter, int)
     assert cond_M.shape == (N,)
-    # 非有限はガードされ 0 埋めされている
+    # jitter fallback が実際に発火した(少なくとも 1 粒子)
+    assert jitter > 0, f"jitter fallback が発火しなかった: jitter={jitter}"
+    # 非有限はガードされ 0 埋めされている(有限性が保たれる)
     assert np.all(np.isfinite(logR))
 
 
