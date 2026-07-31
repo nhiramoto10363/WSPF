@@ -1,0 +1,70 @@
+{
+  "benchmark": "regression",
+  "data": {
+    "T": 70,
+    "batch_size": 16,
+    "grad_clip_norm": 5.0,
+    "hidden_dim": 8,
+    "input_dim": 1,
+    "noise_std": 0.5,
+    "switch_points": [
+      100,
+      200,
+      300,
+      400
+    ],
+    "test_size": 200,
+    "within_regime_drift": 0.0005
+  },
+  "eval": {
+    "coverage_levels": [
+      0.5,
+      0.8,
+      0.9,
+      0.95
+    ],
+    "eval_start": 20,
+    "post_switch_lag": 10
+  },
+  "grid": {
+    "beta": [
+      0.9
+    ],
+    "eta": [
+      0.2
+    ],
+    "prior_std": [
+      0.3
+    ],
+    "sigma_sys": [
+      0.05
+    ]
+  },
+  "methods": [
+    "SGD",
+    "PH-SGD",
+    "Window-SGD",
+    "PF",
+    "WSPF-A",
+    "WSPF-B"
+  ],
+  "n_particles": {
+    "main": 20,
+    "sweep": [
+      20,
+      40
+    ]
+  },
+  "oracle": true,
+  "output_dir": ".tmp_ns/reg",
+  "seeds": {
+    "evaluation": [
+      0,
+      1
+    ],
+    "selection": [
+      1000
+    ]
+  },
+  "task_type": "regression"
+}

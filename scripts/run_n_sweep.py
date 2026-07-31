@@ -73,9 +73,19 @@ def main():
                         acc["entropy_norm"].append(pre.get("entropy", np.nan) / np.log(n))
                         acc["max_weight"].append(pre.get("max_weight", np.nan))
                         acc["spread"].append(pre.get("spread_trace", np.nan))
-                        acc["unique_all"].append(post.get("unique_ancestor_rate_all", np.nan))
-                        acc["unique_resampled"].append(
-                            post.get("unique_ancestor_rate_resample", np.nan))
+                        # ユニーク祖先率の分母は実際の N を使う。summarize_history は
+                        # N を max(unique) で推定するため、毎ステップ縮退する高次元
+                        # 条件では分母を過小評価し率を過大評価する。ここは n が既知
+                        # なので明示的に n で割る。
+                        unique = np.asarray(hr.get("unique_particles", []), dtype=float)
+                        resampled = np.asarray(hr.get("resampled", []), dtype=bool)
+                        if unique.size:
+                            acc["unique_all"].append(float(np.mean(unique) / n))
+                            if resampled.size == unique.size and resampled.any():
+                                acc["unique_resampled"].append(
+                                    float(np.mean(unique[resampled]) / n))
+                            else:
+                                acc["unique_resampled"].append(np.nan)
                         acc["resample_rate"].append(post.get("resample_rate", np.nan))
                         acc["t_step_ms"].append(
                             timing_report(hr).get("t_step", {}).get("mean_ms", np.nan))
