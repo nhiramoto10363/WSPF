@@ -17,6 +17,8 @@ import inspect
 import itertools
 import os
 import sys
+from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import yaml
@@ -25,6 +27,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from src.benchmarks import get_benchmark  # noqa: E402
 from src.evaluation import run_method, run_seeds  # noqa: E402
+from src.evaluation import resolve_workers, _init_worker  # noqa: E402
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _CONFIG_DIR = os.path.join(_REPO_ROOT, "configs")
@@ -201,27 +204,66 @@ def _is_boundary(best, grid):
     return hits
 
 
+def _grid_eval_job(args):
+    """グリッド 1 ジョブ((params, ctx, seed) の 1 評価)。プロセス並列で実行。
+
+    モジュールレベル関数なので ProcessPoolExecutor でピクル可能。
+    戻り値は選択区間のスカラースコアのみ(重い result dict はプロセス間を
+    渡らない)。
+    """
+    method, cfg, ctx, n_particles, params, seed = args
+    bench = build_benchmark(cfg, **ctx)
+    r = run_method(method, bench, n_particles, params, seed=seed,
+                   collect_diagnostics=False)
+    return primary_score(r, cfg, region="selection")
+
+
 def grid_search(method, cfg, n_particles, selection_seeds, emit=print,
-                contexts=None):
+                contexts=None, n_workers=None):
     """選択区間スコアで最良パラメータを返す。端点採択時は警告する。
 
     contexts: ベンチマーク構築の override 辞書のリスト(例: GEFCom の
     [{'zone':1,'noise_std':..}, {'zone':2,..}, ..])。複数指定すると
     その **全コンテキスト×選択シードの平均** 選択区間スコアで選ぶ
     (GEFCom の 3zone 平均による共通 HP 選択, C3)。既定は単一 [{}]。
+
+    (候補 × context × seed)を 1 ジョブとして **プロセス並列** で評価する
+    (旧版と同方針)。並列数は n_workers か環境変数 WSPF_NUM_WORKERS / NCPUS。
+    候補ごとに全ジョブ平均で選ぶため、並列でも結果は逐次と一致する。
     """
     grid = cfg["grid"]
     contexts = contexts or [{}]
-    best, best_score = None, np.inf
-    for params in _param_grid(method, grid):
-        scores = []
+    candidates = list(_param_grid(method, grid))
+
+    # ジョブ列を平坦化: (candidate_index, job_args)
+    jobs = []
+    for ci, params in enumerate(candidates):
         for ctx in contexts:
             for s in selection_seeds:
-                bench = build_benchmark(cfg, **ctx)
-                r = run_method(method, bench, n_particles, params, seed=s,
-                               collect_diagnostics=False)
-                scores.append(primary_score(r, cfg, region="selection"))
-        sc = float(np.nanmean(scores))
+                jobs.append((ci, (method, cfg, ctx, n_particles, params, s)))
+
+    workers = resolve_workers(len(jobs), n_workers)
+    scores_by_cand = defaultdict(list)
+    if workers <= 1:
+        for ci, arg in jobs:
+            scores_by_cand[ci].append(_grid_eval_job(arg))
+    else:
+        try:
+            with ProcessPoolExecutor(max_workers=workers,
+                                     initializer=_init_worker) as ex:
+                for (ci, _), sc in zip(jobs,
+                                       ex.map(_grid_eval_job,
+                                              [a for _, a in jobs])):
+                    scores_by_cand[ci].append(sc)
+        except Exception as e:
+            emit(f"  [警告] {method}: 並列グリッド失敗({e!r})→逐次実行")
+            scores_by_cand = defaultdict(list)
+            for ci, arg in jobs:
+                scores_by_cand[ci].append(_grid_eval_job(arg))
+
+    best, best_score = None, np.inf
+    for ci, params in enumerate(candidates):
+        sc = float(np.nanmean(scores_by_cand[ci]))
         if sc < best_score:
             best_score, best = sc, dict(params)
     hits = _is_boundary(best, grid)

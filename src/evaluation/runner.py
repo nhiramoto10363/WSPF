@@ -23,12 +23,47 @@ prequential test-then-train (R1-12):
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ProcessPoolExecutor
+
 import numpy as np
 
 from src.filters import ParticleFilter, WSPF_B, WSPF_A, OraclePF
 from src.baselines import OnlineSGD, PHSGD, WindowSGD
 
 from . import metrics as M
+
+
+# ======================================================================
+# 並列化ユーティリティ (seed / グリッド候補のプロセス並列, 旧版と同方針)
+# ======================================================================
+def _init_worker():
+    """ワーカープロセス初期化: BLAS のオーバーサブスクリプションを防ぐ。
+
+    多数のプロセスを立てるとき、各プロセス内の numpy/BLAS がさらに
+    マルチスレッド化すると (プロセス数 × BLASスレッド数) で過剰並列になり
+    かえって遅くなる。プロセス並列時は各ワーカーの BLAS を 1 スレッドにする。
+    (逐次実行時は設定しないのでベクトル化 BLAS のマルチスレッドが効く。)
+    """
+    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS",
+                "OPENBLAS_NUM_THREADS", "NUMBA_NUM_THREADS"):
+        os.environ.setdefault(var, "1")
+
+
+def resolve_workers(n_jobs, requested=None):
+    """使用するワーカー数を決める。
+
+    requested=None のとき環境変数 WSPF_NUM_WORKERS → NCPUS → cpu_count の順で
+    参照する。ジョブ数を超えないよう丸め、1 以下なら逐次実行を意味する。
+    WSPF_NUM_WORKERS=1 を設定すれば強制的に逐次にできる。
+    """
+    if n_jobs <= 1:
+        return 1
+    if requested is None:
+        requested = int(os.environ.get(
+            "WSPF_NUM_WORKERS",
+            os.environ.get("NCPUS", os.cpu_count() or 1)))
+    return max(1, min(int(requested), n_jobs))
 
 
 # ======================================================================
@@ -338,10 +373,30 @@ def run_method(method, benchmark, n_particles, params, seed,
 
 
 def run_seeds(method, benchmark, n_particles, params, seeds,
-              collect_diagnostics=True):
-    """複数シードで run_method を実行し、per-seed 結果 dict のリストを返す。"""
-    results = []
-    for s in seeds:
-        results.append(run_method(method, benchmark, n_particles, params, s,
-                                  collect_diagnostics=collect_diagnostics))
-    return results
+              collect_diagnostics=True, n_workers=None):
+    """複数シードで run_method を実行し、per-seed 結果 dict のリストを返す。
+
+    seed 間は独立なのでプロセス並列できる。n_workers を指定するか環境変数
+    WSPF_NUM_WORKERS / NCPUS で並列数を決める(既定は利用可能コア数)。
+    結果は seeds の順序を保って返す(並列でも決定的)。プール生成に失敗する
+    環境では自動的に逐次へフォールバックする。
+    """
+    seeds = list(seeds)
+    workers = resolve_workers(len(seeds), n_workers)
+
+    def _seq():
+        return [run_method(method, benchmark, n_particles, params, s,
+                           collect_diagnostics=collect_diagnostics)
+                for s in seeds]
+
+    if workers <= 1:
+        return _seq()
+    try:
+        with ProcessPoolExecutor(max_workers=workers,
+                                 initializer=_init_worker) as ex:
+            futs = [ex.submit(run_method, method, benchmark, n_particles,
+                              params, s, collect_diagnostics) for s in seeds]
+            return [f.result() for f in futs]
+    except Exception as e:  # プール不可の環境では逐次に退避
+        print(f"[run_seeds] 並列実行に失敗({e!r})→逐次にフォールバック")
+        return _seq()

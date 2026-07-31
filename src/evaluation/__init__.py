@@ -14,6 +14,8 @@ from . import metrics, diagnostics, statistics, output
 from .runner import (
     run_method,
     run_seeds,
+    resolve_workers,
+    _init_worker,
     ALL_METHODS,
     SGD_METHODS,
     FILTER_METHODS,
