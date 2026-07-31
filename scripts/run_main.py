@@ -30,9 +30,38 @@ import numpy as np
 from _common import (load_config, resolve_seeds, build_benchmark,
                      load_selected, get_params, region_mask, estimate_obs_noise)
 from src.evaluation import (run_method, save_run_dir, mean_std, sanitize,
-                            write_json, summarize_history, timing_report)
+                            write_json, summarize_history, timing_report,
+                            paired_compare, wilcoxon_signed)
 
 _REPO = os.path.dirname(os.path.dirname(__file__))
+
+# R1-9 で集約する診断量(report区間平均)のキー
+_DIAG_KEYS = ["ess_over_N", "weight_entropy", "max_weight",
+              "particle_spread", "unique_ancestor_rate", "resample_rate"]
+
+
+def _report_diag(history, report_mask, n_particles):
+    """フィルタ履歴から report 区間平均の R1-9 診断量を返す(M3)。
+
+    測定時点は固定(重み正規化後・リサンプリング前: ess/entropy/max_weight/
+    spread、リサンプリング後: resampled/unique)。report_mask で報告区間のみ集計。
+    """
+    m = np.asarray(report_mask, bool)
+
+    def rmean(key):
+        a = np.asarray(history.get(key, []), dtype=float)
+        if a.size != m.size or not m.any():
+            return float("nan")
+        return float(np.nanmean(a[m]))
+
+    return {
+        "ess_over_N": rmean("ess") / n_particles,
+        "weight_entropy": rmean("entropy"),
+        "max_weight": rmean("max_weight"),
+        "particle_spread": rmean("spread_trace"),
+        "unique_ancestor_rate": rmean("unique_particles") / n_particles,
+        "resample_rate": rmean("resampled"),
+    }
 
 
 def _save_per_seed(base, method, seed, zone, r, cfg):
@@ -79,27 +108,61 @@ def _run_one_config(cfg, out_dir, selected, eval_seeds, n_main, methods,
     if cfg["benchmark"] == "gefcom":
         noise_by_zone = selected.get("gefcom_noise", {})
         sigma = noise_by_zone.get(str(zone))
-        if sigma is None:                       # 後方互換: 未保存なら推定
-            sigma = estimate_obs_noise(cfg, zone=zone)
+        if sigma is None:                       # 再現性のためデフォルトへ落ちない
+            raise KeyError(
+                f"GEFCom zone {zone} の noise_std が selected_params にありません。"
+                f"grid_search.py --benchmark gefcom を先に実行してください。")
         overrides["noise_std"] = sigma
         print(f"  [zone {zone}] σ_obs = {sigma:.4f} (grid と共通)")
 
     key = "mse" if cfg["task_type"] == "regression" else "f1"
+    ztag = f"[zone {zone}] " if zone is not None else ""
     rows = []
+    per_seed = {}       # method -> [report指標(seed別)]  (paired test 用, M2)
     for m in methods:
         params = get_params(selected, m, n_main)
-        vals = []
+        vals, diags = [], []
         for s in eval_seeds:
             bench = build_benchmark(cfg, **overrides)
             r = run_method(m, bench, n_main, params, s, collect_diagnostics=True)
             mask = region_mask(r, "report")
             vals.append(np.nanmean(np.asarray(r["metrics"][key])[mask]))
+            if r.get("history"):
+                diags.append(_report_diag(r["history"], r["report_mask"], n_main))
             _save_per_seed(out_dir, m, s, zone, r, cfg)
+        per_seed[m] = vals
         mu, sd = mean_std(vals)
-        rows.append({"method": m, "N": n_main, "zone": zone, "metric": key,
-                     "mean": mu, "std": sd, "n_seeds": len(eval_seeds)})
-        ztag = f"[zone {zone}] " if zone is not None else ""
+        rows.append({"method": m, "N": n_main, "zone": zone, "kind": "performance",
+                     "metric": key, "mean": mu, "std": sd,
+                     "n_seeds": len(eval_seeds)})
         print(f"  {ztag}{m:12s} {key}={mu:.4f} ± {sd:.4f}")
+        # R1-9 診断量の集約(report区間, seed 横断 mean±SD)(M3)
+        for dk in _DIAG_KEYS:
+            dv = [d[dk] for d in diags if np.isfinite(d.get(dk, np.nan))]
+            if dv:
+                dm, ds = mean_std(dv)
+                rows.append({"method": m, "N": n_main, "zone": zone,
+                             "kind": "diagnostic", "metric": dk,
+                             "mean": dm, "std": ds, "n_seeds": len(dv)})
+
+    # M2: 主結果の対応検定(WSPF-A/B − PF)。R1-14。
+    if "PF" in per_seed:
+        pf = np.asarray(per_seed["PF"], float)
+        for m in ("WSPF-A", "WSPF-B"):
+            if m not in per_seed:
+                continue
+            a = np.asarray(per_seed[m], float)
+            cmp = paired_compare(list(a), list(pf))
+            wil = wilcoxon_signed(list(a), list(pf))
+            rows.append({
+                "method": f"{m}_vs_PF", "N": n_main, "zone": zone,
+                "kind": "paired", "metric": f"{key}_paired",
+                "mean_difference": cmp.get("mean_diff"),
+                "std_difference": float(np.std(a - pf, ddof=1)) if a.size > 1 else 0.0,
+                "paired_t_p": cmp.get("p"), "wilcoxon_p": wil.get("p"),
+            })
+            print(f"  {ztag}{m}−PF: Δ{key}={cmp.get('mean_diff'):.4f} "
+                  f"(t-p={cmp.get('p'):.3g})")
     return rows
 
 

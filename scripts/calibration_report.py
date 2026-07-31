@@ -30,8 +30,14 @@
   2. Brier / ECE はシードごとに算出してから集計する(プール禁止; 信頼度図のみ例外)。
   3. 回復は「各 lag での対応検定」を主張するため、lag τ=0..K-1 ごとに PF 対応検定を
      行い、K 個の p 値に Holm 補正を掛ける(recovery_lag_paired 行)。
-  4. GEFCom は全 zone をループし、grid_search が保存した σ_obs を使う。zone 列で
-     区別し、zone2/zone3 も実際に評価する。
+  4. GEFCom は全 zone をループし、grid_search が保存した σ_obs を **必ず** 使う
+     (benchmark_contexts 経由; 未保存・zone 欠損は例外。既定値へ黙ってフォール
+     バックしない, M1)。zone 列で区別し、zone2/zone3 も実際に評価する。月別性能は
+     暦月ではなく YYYY-MM でキーし、年をまたいで同一暦月を併合しない(R2)。
+
+  5. email も回帰と同様に post-switch 回復曲線 (Accuracy / F1) を出す。ドリフト点
+     [300,600,900,1200] はブロック境界(B=16)と揃わないため、straddle ブロックを
+     除外し、lag0 を「各ドリフト直後の最初の完全な post-switch ブロック」と定義する。
 
 出力: outputs/<benchmark>/calibration/calibration_report.{csv,txt,tex}
       (tidy 上位集合スキーマ: task, method, metric, level, mean, std,
@@ -52,7 +58,8 @@ import os
 import numpy as np
 
 from _common import (load_config, resolve_seeds, build_benchmark,
-                     load_selected, get_params, region_mask)
+                     load_selected, get_params, region_mask,
+                     benchmark_contexts)
 from src.evaluation import (run_seeds, mean_std, recovery_curve,
                             paired_compare, wilcoxon_signed, brier_ece,
                             write_table)
@@ -281,10 +288,14 @@ def monthly_analysis(cfg, benchmark, results_by_method, zone=""):
     """
     報告区間ステップを月へ写像し、月別平均 MSE をシード集計する(zone 別)。
 
+    月キーは暦月(1-12)ではなく YYYY-MM 文字列(例 "2013-07")。年をまたいで
+    同一暦月を併合せず、時系列の進行として扱う(R2)。ゼロ埋め文字列なので
+    辞書順ソート=時系列順になる。
+
     Returns
     -------
     rows : list[dict]
-    monthly : dict[label] -> (months(sorted), mean_per_month, std_per_month)
+    monthly : dict[label] -> (months(sorted YYYY-MM), mean_per_month, std_per_month)
     """
     rows = []
     monthly = {}
@@ -311,12 +322,15 @@ def monthly_analysis(cfg, benchmark, results_by_method, zone=""):
                 gi = int(idx[0])
                 if gi < 0 or gi >= len(timestamps):
                     continue
-                month = timestamps[gi].month
+                ts = timestamps[gi]
+                # 月キーは YYYY-MM(例 "2013-07")。年をまたいで同一暦月を
+                # 併合しない — 時系列進行として正しく扱う(R2)。
+                month = f"{ts.year}-{ts.month:02d}"
                 if np.isfinite(mse[step]):
                     bucket.setdefault(month, []).append(float(mse[step]))
             per_seed_month.append({mo: float(np.mean(v))
                                    for mo, v in bucket.items()})
-        # 月ごとにシード横断集計
+        # 月ごとにシード横断集計(YYYY-MM のゼロ埋め文字列は辞書順=時系列順)。
         all_months = sorted({mo for d in per_seed_month for mo in d})
         means, stds = [], []
         for mo in all_months:
@@ -325,8 +339,7 @@ def monthly_analysis(cfg, benchmark, results_by_method, zone=""):
             means.append(mu)
             stds.append(sd)
             rows.append(_row("gefcom", m, "monthly_mse",
-                             level=f"month_{mo:02d}", mean=mu, std=sd,
-                             zone=zone))
+                             level=mo, mean=mu, std=sd, zone=zone))
         label = f"{m} z{zone}" if zone != "" else m
         monthly[label] = (all_months, means, stds)
     return rows, monthly
@@ -399,6 +412,133 @@ def classification_analysis(cfg, results_by_method):
 
 
 # ======================================================================
+# 分類 (email): post-switch 回復曲線 (Accuracy / F1)
+# ======================================================================
+def _email_recovery_curve(result, switch_points, metric_key, max_lag):
+    """1 実行結果(1 シード)から post-switch の指標回復曲線を作る。
+
+    email のドリフト点はブロック境界(B=16)と揃わないため:
+      - straddle(ドリフトをまたぐ)ブロックは除外する。
+      - **lag 0 = 各ドリフト点直後の最初の完全な post-switch ブロック**
+        (straddle でなく start(=min test_indices) >= d の最初のブロック)。
+      - lag τ = その τ ブロック後。report 区間外・straddle は NaN。
+    ドリフト点の post-switch 窓が報告区間に無い場合(lag0 が報告区間外; 例
+    email の d=300 は選択区間)は、そのドリフト点を除外する。
+    まずシード内でスイッチ横断平均(nanmean)する — seed 横断集約は呼び出し側。
+
+    Returns
+    -------
+    ndarray (max_lag,)   # このシードでのスイッチ横断平均 lag 曲線
+    """
+    arr = np.asarray(result["metrics"].get(metric_key, []), dtype=np.float64)
+    T = arr.size
+    if T == 0:
+        return np.full(max_lag, np.nan)
+    report = np.asarray(result.get("report_mask", np.zeros(T, bool)))
+    straddle = np.asarray(result.get("straddle_mask", np.zeros(T, bool)))
+    test_idx = result.get("test_indices", [])
+
+    def _block_start(step):
+        """ブロック先頭のデータインデックス(= step*B)。"""
+        if step < len(test_idx):
+            idx = np.asarray(test_idx[step], dtype=int)
+            if idx.size:
+                return int(idx.min())
+        return step  # フォールバック(通常到達しない)
+
+    per_switch = []
+    for d in switch_points:
+        # ドリフト d 直後の最初の完全ブロック(straddle でない, start>=d)を探す。
+        lag0 = None
+        for s in range(T):
+            if straddle[s]:
+                continue
+            if _block_start(s) >= d:
+                lag0 = s
+                break
+        # 窓が報告区間に無いドリフト点は除外(lag0 が報告区間外; email の d=300 等)。
+        if lag0 is None or not report[lag0]:
+            continue
+        lags = np.full(max_lag, np.nan)
+        for tau in range(max_lag):
+            t = lag0 + tau
+            if t >= T or not report[t] or straddle[t]:
+                continue
+            v = arr[t]
+            if np.isfinite(v):
+                lags[tau] = v
+        per_switch.append(lags)
+    if not per_switch:
+        return np.full(max_lag, np.nan)
+    return np.nanmean(np.vstack(per_switch), axis=0)
+
+
+def email_recovery_analysis(cfg, results_by_method, switch_points):
+    """
+    email の post-switch 回復曲線(Accuracy / F1)を計算する。
+
+    回帰の recovery_analysis と対応する分類版。各手法・各シードで
+    _email_recovery_curve を計算(シード内でスイッチ横断平均済み)し、
+    シード横断で mean±SD を lag 別に出す(recovery_acc / recovery_f1 行)。
+    さらに per-seed 回復面積(lag 平均)を PF と対応比較する
+    (recovery_acc_area_diff_vs_PF / recovery_f1_area_diff_vs_PF 行)。
+
+    Returns
+    -------
+    rows : list[dict]
+    curves : dict[metric_key] -> dict[method] -> (curve, std)   # 描画用
+    """
+    rows = []
+    curves = {"accuracy": {}, "f1": {}}
+    if not switch_points:
+        return rows, curves
+    K = int(cfg.get("eval", {}).get("post_switch_lag", N_POST_SWITCH))
+
+    specs = (("accuracy", "recovery_acc", "recovery_acc_area_diff_vs_PF"),
+             ("f1", "recovery_f1", "recovery_f1_area_diff_vs_PF"))
+    for metric_key, rec_metric, area_metric in specs:
+        area_by_method = {}
+        for m, results in results_by_method.items():
+            if results:
+                per_seed = np.vstack([
+                    _email_recovery_curve(r, switch_points, metric_key, K)
+                    for r in results])
+            else:
+                per_seed = np.full((0, K), np.nan)
+            if per_seed.size:
+                curve = np.nanmean(per_seed, axis=0)
+                std = np.nanstd(per_seed, axis=0)
+                area = np.nanmean(per_seed, axis=1)   # per-seed 回復面積
+            else:
+                curve = np.full(K, np.nan)
+                std = np.full(K, np.nan)
+                area = np.full(0, np.nan)
+            curves[metric_key][m] = (curve, std)
+            area_by_method[m] = area
+            for tau in range(K):
+                rows.append(_row("classification", m, rec_metric,
+                                 level=f"lag_{tau}",
+                                 mean=float(curve[tau]), std=float(std[tau])))
+
+        # PF との対応比較(回復面積, シード横断)。p 値は専用カラムへ分離する。
+        if "PF" in area_by_method:
+            pf_area = area_by_method["PF"]
+            for m in area_by_method:
+                if m == "PF":
+                    continue
+                area = area_by_method[m]
+                cmp = paired_compare(area, pf_area)
+                wil = wilcoxon_signed(area, pf_area)
+                diffs = _paired_diffs(area, pf_area)
+                sd_diff = float(np.std(diffs)) if diffs.size else float("nan")
+                rows.append(_row("classification", m, area_metric,
+                                 mean_difference=cmp["mean_diff"],
+                                 std_difference=sd_diff,
+                                 paired_t_p=cmp["p"], wilcoxon_p=wil["p"]))
+    return rows, curves
+
+
+# ======================================================================
 # 描画(すべて任意; 失敗しても致命傷にしない)
 # ======================================================================
 def _plot_recovery(curves, out_dir):
@@ -464,6 +604,36 @@ def _plot_reliability(reliability, out_dir):
             pass
 
 
+def _plot_email_recovery(curves, out_dir):
+    """email の post-switch 回復曲線(Accuracy / F1)を描く(任意)。"""
+    if not (_HAVE_MPL and curves):
+        return
+    try:  # pragma: no cover - 描画は環境依存
+        for metric_key, per_method in curves.items():
+            if not per_method:
+                continue
+            fig, ax = plt.subplots(figsize=(6, 4))
+            n_lag = len(next(iter(per_method.values()))[0])
+            lags = np.arange(n_lag)
+            for m, (curve, std) in per_method.items():
+                curve = np.asarray(curve, dtype=np.float64)
+                std = np.asarray(std, dtype=np.float64)
+                ax.plot(lags, curve, marker="o", label=m)
+                # 帯は「シード間ばらつき(±1SD)」であって信頼区間ではない(R2 指摘)。
+                ax.fill_between(lags, curve - std, curve + std, alpha=0.15)
+            ax.set_xlabel("lag after switch (blocks)")
+            ax.set_ylabel(f"report-region {metric_key}")
+            ax.set_title(f"Email post-switch recovery: {metric_key} "
+                         "(band = ±1 SD across seeds)")
+            ax.legend(fontsize=8)
+            fig.tight_layout()
+            fig.savefig(os.path.join(out_dir, f"recovery_email_{metric_key}.png"),
+                        dpi=120)
+            plt.close(fig)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 # ======================================================================
 # メイン
 # ======================================================================
@@ -487,17 +657,16 @@ def main():
 
     rows = []
     curves, monthly, reliability = {}, {}, {}
+    email_curves = {}
 
     if task_type == "regression" and bench_name == "gefcom":
-        # GEFCom: 全 zone をループし、grid_search が保存した σ_obs を使う(C2)。
+        # GEFCom: benchmark_contexts が全 zone をループし、grid_search が保存した
+        # zone 別 σ_obs(selected["gefcom_noise"])を **必ず** 使う。未保存・zone
+        # 欠損は再現性のため例外を送出する(既定値へ黙ってフォールバックしない,
+        # M1)。この方針を _common / run_main と共有する(C2)。
         # 人工スイッチ点なし → 月別性能を回復曲線の代わりに使う。zone 別に評価。
-        noise_by_zone = selected.get("gefcom_noise", {})
-        zones = cfg["data"]["zones"]
-        for z in zones:
-            ctx = {"zone": z}
-            ns = noise_by_zone.get(str(z))
-            if ns is not None:                 # 無ければベンチマーク既定へフォールバック
-                ctx["noise_std"] = ns
+        for ctx in benchmark_contexts(cfg, selected):
+            z = ctx.get("zone", "")
             res, bench_ref = _run_methods(cfg, selected, methods, n_main,
                                           eval_seeds, **ctx)
             rows += coverage_rows(cfg, res, task="gefcom", zone=str(z))
@@ -505,7 +674,7 @@ def main():
                                                zone=str(z))
             rows += mrows
             monthly.update(zmonthly)
-            print(f"[zone {z}] 評価完了 (σ_obs={ns})")
+            print(f"[zone {z}] 評価完了 (σ_obs={ctx.get('noise_std')})")
 
     elif task_type == "regression":
         # 回帰(合成スイッチ): 単一コンテキスト(zone=None)。
@@ -519,9 +688,13 @@ def main():
 
     else:
         # 分類(email): 単一コンテキスト(zone=None)。
-        res, _ = _run_methods(cfg, selected, methods, n_main, eval_seeds)
+        res, bench_ref = _run_methods(cfg, selected, methods, n_main, eval_seeds)
         crows, reliability = classification_analysis(cfg, res)
         rows += crows
+        # 既知ドリフト点あり → post-switch 回復曲線(Accuracy / F1)+ 面積対応比較。
+        switch_points = list(getattr(bench_ref, "switch_points", []))
+        erows, email_curves = email_recovery_analysis(cfg, res, switch_points)
+        rows += erows
 
     # --- テーブル書き出し(必ず実行)---
     base = os.path.join(out_dir, "calibration_report")
@@ -532,6 +705,7 @@ def main():
     _plot_recovery(curves, out_dir)
     _plot_monthly(monthly, out_dir)
     _plot_reliability(reliability, out_dir)
+    _plot_email_recovery(email_curves, out_dir)
     if not _HAVE_MPL:
         print("[注意] matplotlib 不使用: PNG はスキップ(CSV は出力済み)。")
 

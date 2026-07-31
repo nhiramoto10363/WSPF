@@ -18,7 +18,7 @@ import os
 import numpy as np
 
 from _common import (load_config, resolve_seeds, build_benchmark,
-                     load_selected, get_params, region_mask)
+                     load_selected, get_params, region_mask, benchmark_contexts)
 from src.evaluation import (run_seeds, save_run_dir, mean_std,
                             summarize_history, rho_report)
 
@@ -40,13 +40,16 @@ def main():
     n = cfg["n_particles"]["main"]
     sigmas = args.sigma_cd or cfg["grid"]["sigma_sys"]
 
+    contexts = benchmark_contexts(cfg, selected)   # GEFCom は 3zone+保存noise
     rows = []
-    for m in METHODS:
+    for ctx in contexts:
+      zone = ctx.get("zone")
+      for m in METHODS:
         base = get_params(selected, m, n)
         for sc in sigmas:
             params = dict(base)
             params["sigma_sys"] = sc          # σ_cd のみ変える
-            bench = build_benchmark(cfg)
+            bench = build_benchmark(cfg, **ctx)
             results = run_seeds(m, bench, n, params, eval_seeds)
             (mses, ess, resamp, q50, q90v, q99v, rmax,
              p90, p99, clip, cliprate, nonf) = ([] for _ in range(12))
@@ -84,7 +87,8 @@ def main():
             else:  # WSPF-B (PF は None)
                 count_key, rate_key = ("clip_count", "wspf_b_actual_clip_rate")
             row = {
-                "method": m, "sigma_cd": sc, "mse_mean": mu, "mse_std": sd,
+                "method": m, "zone": zone, "sigma_cd": sc,
+                "mse_mean": mu, "mse_std": sd,
                 "ess_over_N": _mean(ess), "resample_rate": _mean(resamp),
                 "rho_q50": _mean(q50), "rho_q90": _mean(q90v),
                 "rho_q99": _mean(q99v), "rho_max": _mean(rmax),
@@ -93,7 +97,8 @@ def main():
                 "nonfinite": _mean(nonf),
             }
             rows.append(row)
-            print(f"{m:7s} σ_cd={sc:<6} MSE={mu:.4f}±{sd:.4f} "
+            ztag = f"[zone {zone}] " if zone is not None else ""
+            print(f"{ztag}{m:7s} σ_cd={sc:<6} MSE={mu:.4f}±{sd:.4f} "
                   f"ESS/N={row['ess_over_N'] if row['ess_over_N'] is None else round(row['ess_over_N'],2)}")
 
     out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)),

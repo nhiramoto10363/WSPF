@@ -23,7 +23,8 @@ import tracemalloc
 
 import numpy as np
 
-from _common import (load_config, build_benchmark, load_selected, get_params)
+from _common import (load_config, build_benchmark, load_selected, get_params,
+                     benchmark_contexts)
 from src.evaluation import (run_method, save_run_dir, timing_report,
                             write_table)
 
@@ -112,12 +113,19 @@ def main():
     checkpoints = cfg.get("eval", {}).get("stream_length_checkpoints", [-1])
     bench_name = cfg["benchmark"]
 
+    # GEFCom は複数 zone だが計算量は代表として先頭 zone で測る(保存済み σ_obs
+    # を使い、暗黙のデフォルト zone1/noise=0.1 に落ちないようにする, M1)。
+    ctx0 = benchmark_contexts(cfg, selected)[0]
+    zone0 = ctx0.get("zone")
+    if zone0 is not None:
+        print(f"[計算量は zone {zone0} で測定 (保存済み σ_obs 使用)]")
+
     rows = []
     # (a) runtime vs N
     for m in FILTER_METHODS:
         params = get_params(selected, m, n_main)
         for n in n_sweep:
-            bench = build_benchmark(cfg)
+            bench = build_benchmark(cfg, **ctx0)
             r = run_method(m, bench, n, params, seed=0, collect_diagnostics=True)
             if not r.get("history"):
                 continue
@@ -125,7 +133,7 @@ def main():
             t_step = tr.get("t_step", {}).get("mean_ms", np.nan)
             sge = int(np.nanmean(r["history"].get("sample_grad_evals",
                                                   [np.nan])))
-            rows.append({"method": m, "N": n, "t_step_ms": t_step,
+            rows.append({"method": m, "N": n, "zone": zone0, "t_step_ms": t_step,
                          "t_correction_ms": tr.get("t_correction", {}).get("mean_ms"),
                          "sample_grad_evals_per_step": sge})
             print(f"{m:7s} N={n:4d} t_step={t_step:.2f}ms grad_evals/step={sge}")
@@ -133,7 +141,7 @@ def main():
     # (b) runtime vs stream length (累積 t_step, R2-1)
     for m in FILTER_METHODS:
         params = get_params(selected, m, n_main)
-        bench = build_benchmark(cfg)
+        bench = build_benchmark(cfg, **ctx0)
         r = run_method(m, bench, n_main, params, seed=0, collect_diagnostics=True)
         if not r.get("history"):
             continue
@@ -143,27 +151,29 @@ def main():
             idx = (len(cum) - 1) if c == -1 else min(c, len(cum)) - 1
             if idx < 0:
                 continue
-            rows.append({"method": m, "N": n_main, "stream_len": (
+            rows.append({"method": m, "N": n_main, "zone": zone0, "stream_len": (
                 "all" if c == -1 else c),
                 "cumulative_runtime_s": float(cum[idx])})
 
     # (c) ピークメモリ (R1-11): 各フィルタ手法を N=main・小ストリームで1回計測。
     for m in FILTER_METHODS:
         params = get_params(selected, m, n_main)
-        # T=MEM_CAP_T は回帰の回帰用に残す(gefcom は無視)が、実際の打ち切りは
+        # T=MEM_CAP_T は回帰用に残す(gefcom は無視)が、実際の打ち切りは
         # max_steps で保証する(gefcom も先頭 MEM_CAP_T ステップで停止)。
-        bench = build_benchmark(cfg, T=MEM_CAP_T)
+        bench = build_benchmark(cfg, T=MEM_CAP_T, **ctx0)
 
         def _run():
             return run_method(m, bench, n_main, params, seed=0,
                               collect_diagnostics=True, max_steps=MEM_CAP_T)
 
         r, peak_mb = _peak_mem_mb(_run)
-        row = {"method": m, "N": n_main, "section": "peak_mem",
-               "peak_mem_MB": peak_mb}
+        # tracemalloc は Python 追跡分のみ(NumPy 実 RSS ピークは別)なので
+        # 列名で明示する(peak_python_traced_mem_MB)。
+        row = {"method": m, "N": n_main, "zone": zone0, "section": "peak_mem",
+               "peak_python_traced_mem_MB": peak_mb}
         row.update(_static_lowrank_mb(m, bench, n_main))  # 内訳を行に展開
         rows.append(row)
-        print(f"{m:7s} N={n_main:4d} peak_mem={peak_mb:.2f} MB")
+        print(f"{m:7s} N={n_main:4d} peak_python_traced_mem={peak_mb:.2f} MB")
 
     out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                            cfg["output_dir"], "compute_cost")
@@ -172,15 +182,16 @@ def main():
     print(f"保存: {out_dir}")
 
     # (d) パラメータ次元 d スイープ (R2-1): hidden_dim を変えて WSPF-A/B を計時。
-    dim_rows = dim_sweep(cfg, bench_name, selected, n_main)
+    dim_rows = dim_sweep(cfg, bench_name, selected, n_main, ctx0)
     if dim_rows:
         dim_base = os.path.join(out_dir, "dim_sweep")
         write_table(dim_rows, dim_base, formats=("csv", "txt", "tex"))
         print(f"保存: {dim_base}.{{csv,txt,tex}}  ({len(dim_rows)} 行)")
 
 
-def dim_sweep(cfg, bench_name, selected, n_main):
+def dim_sweep(cfg, bench_name, selected, n_main, ctx0=None):
     """hidden_dim を走査し WSPF-A/WSPF-B の t_step/t_correction/peak_mem を測る。"""
+    ctx0 = ctx0 or {}
     hidden_dims = DIM_SWEEP.get(bench_name)
     if not hidden_dims:
         print(f"[注意] 次元スイープ未定義のベンチマーク: {bench_name}")
@@ -191,7 +202,8 @@ def dim_sweep(cfg, bench_name, selected, n_main):
             params = get_params(selected, m, n_main)
             # T=MEM_CAP_T は回帰用に残すが、実際の打ち切りは max_steps で保証する
             # (gefcom も先頭 DIM_CAP_STEPS ステップでループを停止)。
-            bench = build_benchmark(cfg, hidden_dim=h, T=MEM_CAP_T)
+            # ctx0(zone/保存noise)を合成しつつ hidden_dim を上書き。
+            bench = build_benchmark(cfg, **{**ctx0, "hidden_dim": h, "T": MEM_CAP_T})
             d = int(bench.param_dim)
 
             def _run():

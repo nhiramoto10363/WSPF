@@ -19,9 +19,10 @@ and test blocks do not overlap across steps)。
 という意味ではない点に注意する。
 
 R1-12 straddle: ブロックがドリフト点をまたぐ (block 内で概念が切り替わる)
-場合は straddles_switch=True とし、全体 Accuracy/F1 には含めてよいが
-stable / post-switch 解析からは除外できるようにする。
-regime_id は 5 期間 (0..4) のどれかをブロック先頭で判定する。
+場合は straddles_switch=True とし、集計側(region_mask)で全ての報告指標・
+switch整合解析から除外する(Straddling blocks are excluded from all reported
+metrics and switch-aligned analyses)。regime_id は 5 期間 (0..4) をブロック
+先頭で判定する。
 
 リークフリー PCA: pca_fit_end (既定 600) より前のみで主成分方向を学習する。
 """

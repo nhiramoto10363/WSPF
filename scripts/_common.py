@@ -107,11 +107,12 @@ def region_mask(result, region):
         mask = np.ones(n, dtype=bool)
     else:
         raise ValueError(f"unknown region: {region!r}")
+    # straddle 除外を先に適用してから空判定する(除外後に空になる設定も検出)。
+    mask = mask & ~np.asarray(result.get("straddle_mask", np.zeros(n, bool)))
     if region in ("selection", "report") and not mask.any():
         raise ValueError(
-            f"region '{region}' にサンプルがありません(空マスク)。"
+            f"region '{region}' にサンプルがありません(straddle除外後に空)。"
             f"eval_start / report_start とストリーム長の設定を確認してください。")
-    mask = mask & ~np.asarray(result.get("straddle_mask", np.zeros(n, bool)))
     return mask
 
 
@@ -242,6 +243,31 @@ def get_params(selected, method, n_particles):
     if method in ("PF", "WSPF-A", "WSPF-B"):
         return selected["by_n_particles"][str(n_particles)][method]
     return selected["no_n"][method]
+
+
+def benchmark_contexts(cfg, selected):
+    """ベンチマーク構築の override 辞書リストを返す(補助実験の共通化)。
+
+    GEFCom は全 zone をループし、grid_search が保存した zone 別観測ノイズ
+    (selected["gefcom_noise"])を必ず使う。未保存なら再現性のため例外にする
+    (デフォルト値へ黙ってフォールバックしない, M1)。他ベンチマークは [{}]。
+    各コンテキストには識別用に "zone" が入る(出力行の zone 列に使う)。
+    """
+    if cfg["benchmark"] != "gefcom":
+        return [{}]
+    noise = selected.get("gefcom_noise")
+    if not noise:
+        raise KeyError(
+            "gefcom_noise が selected_params にありません。"
+            "先に scripts/grid_search.py --benchmark gefcom を実行してください。")
+    zones = cfg.get("data", {}).get("zones", [1])
+    ctxs = []
+    for z in zones:
+        if str(z) not in noise:
+            raise KeyError(f"GEFCom zone {z} の noise_std が selected_params に"
+                           f"ありません。grid_search を再実行してください。")
+        ctxs.append({"zone": z, "noise_std": noise[str(z)]})
+    return ctxs
 
 
 def estimate_obs_noise(cfg, zone=None, eta=0.1, prior_std=0.1):

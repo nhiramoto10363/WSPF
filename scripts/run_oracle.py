@@ -72,10 +72,14 @@ def main():
         print(f"{m:8s} MSE={mu:.4f}±{sd:.4f}")
 
     # PF に対する対応のある検定 & WSPF-A − Oracle ギャップ(推定誤差寄与)
+    # p値は std ではなく専用列に格納する(較正レポートと形式を統一)。
     for m in ("Oracle", "WSPF-A", "WSPF-B"):
         cmp = paired_compare(per_seed[m], per_seed["PF"])
-        rows.append({"method": f"{m}_vs_PF", "metric": "paired",
-                     "mean": cmp.get("mean_diff"), "std": cmp.get("p")})
+        diffs = np.asarray(per_seed[m], float) - np.asarray(per_seed["PF"], float)
+        rows.append({"method": f"{m}_vs_PF", "metric": "mse_paired",
+                     "mean_difference": cmp.get("mean_diff"),
+                     "std_difference": float(np.std(diffs, ddof=1)) if diffs.size > 1 else 0.0,
+                     "paired_t_p": cmp.get("p")})
     gap = float(np.mean(np.array(per_seed["WSPF-A"]) - np.array(per_seed["Oracle"])))
     print(f"WSPF-A − Oracle ギャップ(近似による推定誤差寄与) = {gap:.4f}")
     rows.append({"method": "WSPF-A_minus_Oracle", "metric": "gap",

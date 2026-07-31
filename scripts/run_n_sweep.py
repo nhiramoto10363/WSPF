@@ -20,7 +20,7 @@ import os
 import numpy as np
 
 from _common import (load_config, resolve_seeds, build_benchmark,
-                     load_selected, get_params, region_mask)
+                     load_selected, get_params, region_mask, benchmark_contexts)
 from src.evaluation import (run_seeds, save_run_dir, mean_std,
                             summarize_history, timing_report)
 
@@ -43,29 +43,33 @@ def main():
     n_sweep = cfg["n_particles"]["sweep"]
     key = "mse" if cfg["task_type"] == "regression" else "f1"
 
+    contexts = benchmark_contexts(cfg, selected)   # GEFCom は 3zone+保存noise
     rows = []
-    for m in FILTER_METHODS:
-        # 主分析: N=main の HP を固定して全 N で使う
-        params_fixed = get_params(selected, m, n_main)
-        for n in n_sweep:
-            # Supplement モードでは各 N のチューニング済み HP を使う
-            params = get_params(selected, m, n) if args.tuned_per_n else params_fixed
-            bench = build_benchmark(cfg)
-            results = run_seeds(m, bench, n, params, eval_seeds)
-            vals, ess_frac, resamp = [], [], []
-            for r in results:
-                mask = region_mask(r, "report")
-                vals.append(np.nanmean(np.asarray(r["metrics"][key])[mask]))
-                if r.get("history"):
-                    d = summarize_history(r["history"])
-                    ess_frac.append(d["pre_resample"].get("ess", np.nan) / n)
-                    resamp.append(d["post_resample"].get("resample_rate", np.nan))
-            mu, sd = mean_std(vals)
-            rows.append({"method": m, "N": n, "metric": key,
-                         "mean": mu, "std": sd,
-                         "ess_over_N": float(np.nanmean(ess_frac)) if ess_frac else None,
-                         "resample_rate": float(np.nanmean(resamp)) if resamp else None})
-            print(f"{m:8s} N={n:4d}  {key}={mu:.4f}±{sd:.4f}")
+    for ctx in contexts:
+        zone = ctx.get("zone")
+        for m in FILTER_METHODS:
+            # 主分析: N=main の HP を固定して全 N で使う
+            params_fixed = get_params(selected, m, n_main)
+            for n in n_sweep:
+                # Supplement モードでは各 N のチューニング済み HP を使う
+                params = get_params(selected, m, n) if args.tuned_per_n else params_fixed
+                bench = build_benchmark(cfg, **ctx)
+                results = run_seeds(m, bench, n, params, eval_seeds)
+                vals, ess_frac, resamp = [], [], []
+                for r in results:
+                    mask = region_mask(r, "report")
+                    vals.append(np.nanmean(np.asarray(r["metrics"][key])[mask]))
+                    if r.get("history"):
+                        d = summarize_history(r["history"])
+                        ess_frac.append(d["pre_resample"].get("ess", np.nan) / n)
+                        resamp.append(d["post_resample"].get("resample_rate", np.nan))
+                mu, sd = mean_std(vals)
+                rows.append({"method": m, "N": n, "zone": zone, "metric": key,
+                             "mean": mu, "std": sd,
+                             "ess_over_N": float(np.nanmean(ess_frac)) if ess_frac else None,
+                             "resample_rate": float(np.nanmean(resamp)) if resamp else None})
+                ztag = f"[zone {zone}] " if zone is not None else ""
+                print(f"{ztag}{m:8s} N={n:4d}  {key}={mu:.4f}±{sd:.4f}")
 
     out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                            cfg["output_dir"], "n_sweep")

@@ -21,7 +21,7 @@ import os
 import numpy as np
 
 from _common import (load_config, resolve_seeds, build_benchmark,
-                     load_selected, get_params, region_mask)
+                     load_selected, get_params, region_mask, benchmark_contexts)
 from src.evaluation import run_seeds, save_run_dir, mean_std
 
 FILTER_METHODS = ["PF", "WSPF-A", "WSPF-B"]
@@ -39,22 +39,26 @@ def main():
     n = cfg["n_particles"]["main"]
     key = "mse" if cfg["task_type"] == "regression" else "f1"
 
+    contexts = benchmark_contexts(cfg, selected)   # GEFCom は 3zone+保存noise
     rows = []
-    for fixed in FILTER_METHODS:
-        base = get_params(selected, fixed, n)
-        shared = {k: base[k] for k in SHARED_KEYS if k in base}
-        for m in FILTER_METHODS:
-            params = dict(shared)
-            if m == "WSPF-A":  # β は WSPF-A 自身の選択値
-                params["beta"] = get_params(selected, "WSPF-A", n).get("beta", 0.9)
-            bench = build_benchmark(cfg)
-            results = run_seeds(m, bench, n, params, eval_seeds)
-            vals = [np.nanmean(np.asarray(r["metrics"][key])[
-                        region_mask(r, "report")]) for r in results]
-            mu, sd = mean_std(vals)
-            rows.append({"shared_from": fixed, "method": m,
-                         "metric": key, "mean": mu, "std": sd})
-            print(f"shared={fixed:7s} → {m:7s}  {key}={mu:.4f}±{sd:.4f}")
+    for ctx in contexts:
+        zone = ctx.get("zone")
+        for fixed in FILTER_METHODS:
+            base = get_params(selected, fixed, n)
+            shared = {k: base[k] for k in SHARED_KEYS if k in base}
+            for m in FILTER_METHODS:
+                params = dict(shared)
+                if m == "WSPF-A":  # β は WSPF-A 自身の選択値
+                    params["beta"] = get_params(selected, "WSPF-A", n).get("beta", 0.9)
+                bench = build_benchmark(cfg, **ctx)
+                results = run_seeds(m, bench, n, params, eval_seeds)
+                vals = [np.nanmean(np.asarray(r["metrics"][key])[
+                            region_mask(r, "report")]) for r in results]
+                mu, sd = mean_std(vals)
+                rows.append({"shared_from": fixed, "method": m, "zone": zone,
+                             "metric": key, "mean": mu, "std": sd})
+                ztag = f"[zone {zone}] " if zone is not None else ""
+                print(f"{ztag}shared={fixed:7s} → {m:7s}  {key}={mu:.4f}±{sd:.4f}")
 
     out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                            cfg["output_dir"], "matched_hp")

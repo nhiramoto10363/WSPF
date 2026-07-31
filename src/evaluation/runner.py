@@ -12,8 +12,10 @@ prequential test-then-train (R1-12):
     各 StreamStep で
       1. まず現在の推定(θ もしくは重み付き粒子予測)で X_test を評価し、
       2. その後 X_train で更新する(baselines は .train、filters は .step)。
-    straddles_switch が True のブロックは全体集計には含めるが、
-    stable / post-switch 分析から除外できるよう boolean マスクを記録する。
+    straddles_switch が True のブロック(切替をまたぐ)は、集計側(region_mask)で
+    全ての報告指標・switch整合解析から除外される。runner はマスクを記録するのみ。
+    (Straddling blocks are excluded from all reported metrics and
+     switch-aligned analyses.)
 
 フィルタのシードは base_seed からのオフセット規約で決める:
     PF +1, WSPF-B +3, WSPF-A +5, Oracle +7, SGD 系 +10。
