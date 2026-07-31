@@ -126,7 +126,7 @@ def _predict_particles_weights(method, estimator):
 # メインの実行関数
 # ======================================================================
 def run_method(method, benchmark, n_particles, params, seed,
-               collect_diagnostics=True, filter_seed=None):
+               collect_diagnostics=True, filter_seed=None, max_steps=None):
     """
     1 メソッド × 1 シードを prequential ループで駆動する。
 
@@ -191,12 +191,17 @@ def run_method(method, benchmark, n_particles, params, seed,
     step_indices = []
     # 予測・診断保存用 (P6, R2-5): report 区間のサンプル単位を蓄積
     rep_y, rep_mean, rep_std, rep_probs = [], [], [], []
+    rep_block_step, rep_block_len = [], []   # 各報告ブロックの step_index と長さ
     train_idx_list, test_idx_list = [], []
 
     def _push(name, val):
         metric_lists.setdefault(name, []).append(float(val))
 
-    for stp in benchmark.stream(seed):
+    for _i, stp in enumerate(benchmark.stream(seed)):
+        # max_steps 指定時はループ自体をここで打ち切る(計時用に全ストリームを
+        # 走らせない, 修正方針 compute)。
+        if max_steps is not None and _i >= max_steps:
+            break
         Xte, yte = stp.X_test, stp.y_test
         Xtr, ytr = stp.X_train, stp.y_train
         has_test = Xte is not None and np.asarray(Xte).shape[0] > 0
@@ -222,6 +227,8 @@ def run_method(method, benchmark, n_particles, params, seed,
                     rep_y.append(yte_arr)
                     rep_mean.append(np.asarray(pred_mean, np.float64).ravel())
                     rep_std.append(np.asarray(pred_std, np.float64).ravel())
+                    rep_block_step.append(int(stp.step_index))
+                    rep_block_len.append(int(yte_arr.size))
             else:
                 # 分類: predict_fn は確率(あるいは logit)。[0,1] 外は sigmoid。
                 probs = pred_mean
@@ -237,6 +244,8 @@ def run_method(method, benchmark, n_particles, params, seed,
                 if stp.is_report_step:
                     rep_probs.append(np.asarray(probs, np.float64).ravel())
                     rep_y.append(yte_arr)
+                    rep_block_step.append(int(stp.step_index))
+                    rep_block_len.append(int(yte_arr.size))
         else:
             # test ブロックが空: NaN を記録して整列を保つ
             if is_reg:
@@ -296,6 +305,15 @@ def run_method(method, benchmark, n_particles, params, seed,
         predictions["std"] = _cat(rep_std)
     else:
         predictions["probs"] = _cat(rep_probs)
+    # サンプル→ステップ対応(§6): 各報告ブロックの step_index/長さと、
+    # flatten 済み予測に対する block 境界オフセット・サンプル別 step_index。
+    block_step = np.asarray(rep_block_step, dtype=int)
+    block_len = np.asarray(rep_block_len, dtype=int)
+    predictions["block_step_index"] = block_step
+    predictions["block_len"] = block_len
+    predictions["offsets"] = np.concatenate([[0], np.cumsum(block_len)])
+    predictions["pred_step_index"] = np.repeat(block_step, block_len) \
+        if block_step.size else np.empty(0, int)
 
     return {
         "metrics": metrics_out,

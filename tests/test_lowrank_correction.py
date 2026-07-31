@@ -15,11 +15,13 @@ R1-10: WSPF-A の低ランク補正(Woodbury/Cholesky)を dense 実装と照合�
 
 import os
 import sys
+from unittest import mock
 
 import numpy as np
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from src.filters import wspf_a
 from src.filters.wspf_a import compute_correction_method_a
 
 
@@ -112,10 +114,54 @@ def test_jitter_fallback_and_nonfinite_count():
     assert isinstance(nonfinite, int)
     assert isinstance(jitter, int)
     assert cond_M.shape == (N,)
-    # jitter fallback が実際に発火した(少なくとも 1 粒子)
-    assert jitter > 0, f"jitter fallback が発火しなかった: jitter={jitter}"
+    # 環境依存の数値挙動でフレークしないよう非負のみ確認(発火の決定的検証は
+    # 下の monkeypatch テストが担う)。
+    assert jitter >= 0
     # 非有限はガードされ 0 埋めされている(有限性が保たれる)
     assert np.all(np.isfinite(logR))
+
+
+def test_jitter_fallback_forced_by_monkeypatch():
+    """(6)(7) numpy.linalg.cholesky をモンキーパッチし、batched 呼び出しと各粒子
+    の最初の per-particle 呼び出しを LinAlgError で失敗させることで、jitter
+    fallback を決定的に発火させる。
+
+    呼び出し順:
+      1. batched cholesky(M) (ndim==3)          → 失敗させる
+      2. 粒子 i の attempt1 cholesky(M[i])       → 失敗させる(奇数回目の 2D 呼び出し)
+      3. 粒子 i の attempt2 cholesky(M[i]+jit)   → 本物に委譲して成功(偶数回目)
+    これで各粒子が jitter を要し jitter_count == N > 0 となる。
+    """
+    epsilon, xi_hat, deviations, eta, c, d = _make_case()
+
+    real_cholesky = np.linalg.cholesky   # パッチ前に本物を退避
+    twod_calls = {"n": 0}
+
+    def fake_cholesky(a):
+        arr = np.asarray(a)
+        if arr.ndim == 3:
+            # batched パスを必ず失敗させ per-particle fallback へ落とす
+            raise np.linalg.LinAlgError("forced batched cholesky failure")
+        twod_calls["n"] += 1
+        if twod_calls["n"] % 2 == 1:
+            # 各粒子の最初の試行を失敗させ jitter 追加の再試行を強制する
+            raise np.linalg.LinAlgError("forced per-particle cholesky failure")
+        # jitter 付与済みの再試行は本物の cholesky で成功させる
+        return real_cholesky(arr)
+
+    # 関数が参照する module-level np(= numpy)の linalg.cholesky をパッチする。
+    with mock.patch.object(wspf_a.np.linalg, "cholesky", side_effect=fake_cholesky):
+        logR, rho, nonfinite, cond_M, jitter = compute_correction_method_a(
+            epsilon, xi_hat, deviations, eta, c, d
+        )
+
+    N = deviations.shape[0]
+    # 全粒子が per-particle jitter を要した
+    assert jitter > 0, f"jitter fallback が発火しなかった: jitter={jitter}"
+    assert jitter == N
+    # 補正値は有限に保たれる
+    assert np.all(np.isfinite(logR))
+    assert nonfinite == 0
 
 
 if __name__ == "__main__":
@@ -123,4 +169,5 @@ if __name__ == "__main__":
     test_rank_le_B_minus_1()
     test_finite_for_small_sigma_cd()
     test_jitter_fallback_and_nonfinite_count()
+    test_jitter_fallback_forced_by_monkeypatch()
     print("test_lowrank_correction: 全テスト通過")

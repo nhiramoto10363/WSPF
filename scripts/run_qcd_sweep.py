@@ -49,7 +49,7 @@ def main():
             bench = build_benchmark(cfg)
             results = run_seeds(m, bench, n, params, eval_seeds)
             (mses, ess, resamp, q50, q90v, q99v, rmax,
-             p90, p99, clip, nonf) = ([] for _ in range(11))
+             p90, p99, clip, cliprate, nonf) = ([] for _ in range(12))
             for r in results:
                 mask = region_mask(r, "report")
                 mses.append(np.nanmean(np.asarray(r["metrics"]["mse"])[mask]))
@@ -64,23 +64,33 @@ def main():
                     rmax.append(rr.get("max", np.nan))
                     p90.append(rr.get("p_gt_0.9", np.nan))
                     p99.append(rr.get("p_gt_0.99", np.nan))
-                    clip.append(rr.get("rho_clip_count", np.nan))
+                    cnt = rr.get("rho_clip_count", np.nan)
+                    clip.append(cnt)
+                    # クリップ「頻度」= 回数 / (粒子数 × 評価ステップ数) (R1-8)
+                    n_steps = int(np.asarray(r["history"].get("ess", [])).size)
+                    denom = n * max(n_steps, 1)
+                    cliprate.append(cnt / denom if np.isfinite(cnt) else np.nan)
                     nonf.append(rr.get("logcorr_nonfinite_count", np.nan))
             mu, sd = mean_std(mses)
 
             def _mean(x):
                 return float(np.nanmean(x)) if x and np.any(np.isfinite(x)) else None
 
-            # clip 命名の区別(R1-8): WSPF-B は補正 clipping の作動回数、
-            # WSPF-A は診断上の ρ≥0.999 到達回数(実際の補正 clip ではない)。
-            clip_key = "rho_ge_0.999_count" if m == "WSPF-A" else "rho_clip_count"
+            # clip 命名の区別(R1-8): WSPF-B は補正 clipping の実作動、
+            # WSPF-A は診断上の ρ≥0.999 到達(実際の補正 clip ではない)。
+            if m == "WSPF-A":
+                count_key, rate_key = ("rho_ge_0.999_count",
+                                       "wspf_a_rho_threshold_exceedance_rate")
+            else:  # WSPF-B (PF は None)
+                count_key, rate_key = ("clip_count", "wspf_b_actual_clip_rate")
             row = {
                 "method": m, "sigma_cd": sc, "mse_mean": mu, "mse_std": sd,
                 "ess_over_N": _mean(ess), "resample_rate": _mean(resamp),
                 "rho_q50": _mean(q50), "rho_q90": _mean(q90v),
                 "rho_q99": _mean(q99v), "rho_max": _mean(rmax),
                 "P_rho_gt_0.9": _mean(p90), "P_rho_gt_0.99": _mean(p99),
-                clip_key: _mean(clip), "nonfinite": _mean(nonf),
+                count_key: _mean(clip), rate_key: _mean(cliprate),
+                "nonfinite": _mean(nonf),
             }
             rows.append(row)
             print(f"{m:7s} σ_cd={sc:<6} MSE={mu:.4f}±{sd:.4f} "

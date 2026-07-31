@@ -19,11 +19,24 @@
       (回復曲線の代替, R2 指摘)。
 
   分類 (email):
-    - 報告区間のサンプル単位 probs/labels をシード横断で連結し、
-      Brier / ECE と信頼度図 (reliability diagram) を出す。
+    - 報告区間のサンプル単位 probs/labels を **シードごとに** Brier / ECE を
+      計算し、シード横断で mean±SD を報告する(プールしない)。さらに各手法の
+      per-seed ECE / Brier を PF と対応比較する。信頼度図 (reliability diagram)
+      だけは全シードをプールして描く(唯一プールする箇所)。
+
+査読 R2-5 フォローアップ対応:
+  1. 回復面積の PF 比較で p 値を std 列に入れない。mean_difference /
+     std_difference / paired_t_p / wilcoxon_p を別カラムに分離する。
+  2. Brier / ECE はシードごとに算出してから集計する(プール禁止; 信頼度図のみ例外)。
+  3. 回復は「各 lag での対応検定」を主張するため、lag τ=0..K-1 ごとに PF 対応検定を
+     行い、K 個の p 値に Holm 補正を掛ける(recovery_lag_paired 行)。
+  4. GEFCom は全 zone をループし、grid_search が保存した σ_obs を使う。zone 列で
+     区別し、zone2/zone3 も実際に評価する。
 
 出力: outputs/<benchmark>/calibration/calibration_report.{csv,txt,tex}
-      (tidy schema: task, method, metric, level, mean, std)
+      (tidy 上位集合スキーマ: task, method, metric, level, mean, std,
+       mean_difference, std_difference, paired_t_p, paired_t_p_holm,
+       wilcoxon_p, zone。行によっては一部カラムが空でよい。)
       + PNG (reliability_*.png / recovery_regression.png / monthly_gefcom.png)
       は matplotlib が使える場合のみ。失敗しても CSV は必ず出す。
 
@@ -41,7 +54,8 @@ import numpy as np
 from _common import (load_config, resolve_seeds, build_benchmark,
                      load_selected, get_params, region_mask)
 from src.evaluation import (run_seeds, mean_std, recovery_curve,
-                            paired_compare, brier_ece, write_table)
+                            paired_compare, wilcoxon_signed, brier_ece,
+                            write_table)
 
 # ----------------------------------------------------------------------
 # matplotlib は任意。設定を済ませてから import し、失敗しても致命傷にしない。
@@ -59,6 +73,63 @@ except Exception:  # noqa: BLE001
 LEVELS = (0.5, 0.8, 0.9, 0.95)
 N_POST_SWITCH = 10   # 回復曲線の lag 数 (post_switch_lag と同義)
 
+# tidy テーブルの一貫した上位集合スキーマ(行によって一部空でよい)。
+# _row() を必ず経由することで CSV のカラム順を固定する。
+_SCHEMA = ("task", "method", "metric", "level", "mean", "std",
+           "mean_difference", "std_difference", "paired_t_p",
+           "paired_t_p_holm", "wilcoxon_p", "zone")
+
+
+def _row(task, method, metric, level="", mean="", std="",
+         mean_difference="", std_difference="", paired_t_p="",
+         paired_t_p_holm="", wilcoxon_p="", zone=""):
+    """スキーマ固定の 1 行を作る(欠損カラムは空文字)。"""
+    return {"task": task, "method": method, "metric": metric,
+            "level": level, "mean": mean, "std": std,
+            "mean_difference": mean_difference,
+            "std_difference": std_difference,
+            "paired_t_p": paired_t_p, "paired_t_p_holm": paired_t_p_holm,
+            "wilcoxon_p": wilcoxon_p, "zone": zone}
+
+
+def _paired_diffs(a, b):
+    """対応する有限値ペアの差 (a-b) を返す(長さ違いは短い方に合わせる)。"""
+    a = np.asarray(a, dtype=np.float64).ravel()
+    b = np.asarray(b, dtype=np.float64).ravel()
+    n = min(a.size, b.size)
+    a, b = a[:n], b[:n]
+    mask = np.isfinite(a) & np.isfinite(b)
+    return a[mask] - b[mask]
+
+
+def _holm_correction(pvals):
+    """
+    Holm-Bonferroni 補正を p 値ベクトルに掛ける(有限値のみ対象)。
+
+    statsmodels があればそれを使い、無ければ手実装にフォールバックする。
+    手実装: 昇順に並べ (m-rank)*p を掛け、単調非減少を強制し、1 でクリップ。
+    (m = 有限な検定数)。NaN の p 値は補正結果も NaN のまま残す。
+    """
+    p = np.asarray(pvals, dtype=np.float64).ravel()
+    adj = np.full(p.size, np.nan)
+    finite = np.where(np.isfinite(p))[0]
+    if finite.size == 0:
+        return adj
+    fp = p[finite]
+    try:  # statsmodels があれば利用(guard import)
+        from statsmodels.stats.multitest import multipletests
+        _, p_adj, _, _ = multipletests(fp, method="holm")
+        adj[finite] = p_adj
+        return adj
+    except Exception:  # noqa: BLE001 - Holm を手実装にフォールバック
+        m = fp.size
+        order = np.argsort(fp)
+        running = 0.0
+        for rank, k in enumerate(order):
+            running = max(running, (m - rank) * float(fp[k]))
+            adj[finite[k]] = min(running, 1.0)
+        return adj
+
 
 # ======================================================================
 # 共通ヘルパ
@@ -66,6 +137,22 @@ N_POST_SWITCH = 10   # 回復曲線の lag 数 (post_switch_lag と同義)
 def _methods(cfg):
     """較正対象の手法 (粒子フィルタ + 点推定ベースライン; NoChange 除外)。"""
     return [m for m in cfg["methods"] if m != "NoChange"]
+
+
+def _run_methods(cfg, selected, methods, n_main, eval_seeds, **ctx):
+    """全手法を評価シードで実行する。ctx はベンチマーク構築の override
+    (GEFCom の zone / noise_std 等)。(results_by_method, bench_ref) を返す。"""
+    results_by_method = {}
+    bench_ref = None
+    for m in methods:
+        params = get_params(selected, m, n_main)
+        bench = build_benchmark(cfg, **ctx)
+        if bench_ref is None:
+            bench_ref = bench
+        results_by_method[m] = run_seeds(m, bench, n_main, params, eval_seeds)
+        tag = f" {ctx}" if ctx else ""
+        print(f"[run] {m}{tag}: {len(eval_seeds)} seeds done")
+    return results_by_method, bench_ref
 
 
 def _report_mean(result, key):
@@ -81,8 +168,11 @@ def _report_mean(result, key):
 # ======================================================================
 # 回帰: カバレッジ vs 名目
 # ======================================================================
-def coverage_rows(cfg, results_by_method):
-    """報告区間のカバレッジ/区間幅を水準別にシード集計する。"""
+def coverage_rows(cfg, results_by_method, task="regression", zone=""):
+    """報告区間のカバレッジ/区間幅/CRPS を水準別にシード集計する。
+
+    task/zone を明示して行に付与する(GEFCom は zone 別に呼ぶ)。
+    """
     rows = []
     for m, results in results_by_method.items():
         for lvl in LEVELS:
@@ -92,12 +182,13 @@ def coverage_rows(cfg, results_by_method):
             wid = [_report_mean(r, wid_key) for r in results]
             cmu, csd = mean_std(cov)
             wmu, wsd = mean_std(wid)
-            rows.append({"task": "regression", "method": m,
-                         "metric": "coverage", "level": f"{lvl:.2f}",
-                         "mean": cmu, "std": csd})
-            rows.append({"task": "regression", "method": m,
-                         "metric": "width", "level": f"{lvl:.2f}",
-                         "mean": wmu, "std": wsd})
+            rows.append(_row(task, m, "coverage", level=f"{lvl:.2f}",
+                             mean=cmu, std=csd, zone=zone))
+            rows.append(_row(task, m, "width", level=f"{lvl:.2f}",
+                             mean=wmu, std=wsd, zone=zone))
+        crps = [_report_mean(r, "crps") for r in results]
+        qmu, qsd = mean_std(crps)
+        rows.append(_row(task, m, "crps", mean=qmu, std=qsd, zone=zone))
     return rows
 
 
@@ -127,8 +218,10 @@ def recovery_analysis(cfg, results_by_method, switch_points):
     if not valid_sw:
         return rows, curves
 
-    # 各手法の per-seed 回復面積(lag 平均)を保持し、PF と対応比較する。
+    # 各手法の per-seed 回復面積(lag 平均)と per-seed×lag 行列を保持する。
+    # recovery_curve の per_seed は (n_seed, K): 各シードでスイッチ横断平均済み。
     area_by_method = {}
+    lagmat_by_method = {}
     for m, results in results_by_method.items():
         mse_ts = []
         for r in results:
@@ -138,38 +231,60 @@ def recovery_analysis(cfg, results_by_method, switch_points):
             mse_ts.append(mse)
         rec = recovery_curve(mse_ts, valid_sw, max_lag=N_POST_SWITCH)
         curves[m] = (rec["curve"], rec["std"])
+        lagmat_by_method[m] = rec["per_seed"]           # (n_seed, K)
         # per-seed 回復面積 = lag 平均(シード内でスイッチ横断は済み)
         area = np.nanmean(rec["per_seed"], axis=1)
         area_by_method[m] = area
         amu, asd = mean_std(area)
-        rows.append({"task": "regression", "method": m,
-                     "metric": "recovery_area", "level": "",
-                     "mean": amu, "std": asd})
+        rows.append(_row("regression", m, "recovery_area", mean=amu, std=asd))
 
-    # PF との対応比較(シード横断の paired t)
+    # PF との対応比較(シード横断)。p 値は std 列に入れず専用カラムに分離する。
     if "PF" in area_by_method:
         pf_area = area_by_method["PF"]
-        for m, area in area_by_method.items():
+        pf_lag = lagmat_by_method["PF"]
+        for m in area_by_method:
             if m == "PF":
                 continue
+            area = area_by_method[m]
+            # (a) 回復面積差: paired-t と Wilcoxon を別カラムに、std は差の SD。
             cmp = paired_compare(area, pf_area)
-            rows.append({"task": "regression", "method": m,
-                         "metric": "recovery_area_diff_vs_PF", "level": "",
-                         "mean": cmp["mean_diff"], "std": cmp["p"]})
+            wil = wilcoxon_signed(area, pf_area)
+            diffs = _paired_diffs(area, pf_area)
+            sd_diff = float(np.std(diffs)) if diffs.size else float("nan")
+            rows.append(_row("regression", m, "recovery_area_diff_vs_PF",
+                             mean_difference=cmp["mean_diff"],
+                             std_difference=sd_diff,
+                             paired_t_p=cmp["p"], wilcoxon_p=wil["p"]))
+
+            # (b) lag 別対応検定 + Holm 補正。各 lag τ で長さ n_seed の対応比較。
+            mmat = lagmat_by_method[m]
+            K = mmat.shape[1]
+            lag_md, lag_p = [], []
+            for tau in range(K):
+                c = paired_compare(mmat[:, tau], pf_lag[:, tau])
+                lag_md.append(c["mean_diff"])
+                lag_p.append(c["p"])
+            lag_p_holm = _holm_correction(lag_p)
+            for tau in range(K):
+                rows.append(_row("regression", m, "recovery_lag_paired",
+                                 level=f"lag_{tau}",
+                                 mean_difference=lag_md[tau],
+                                 paired_t_p=lag_p[tau],
+                                 paired_t_p_holm=float(lag_p_holm[tau])))
     return rows, curves
 
 
 # ======================================================================
 # gefcom: 月別性能(回復曲線の代替)
 # ======================================================================
-def monthly_analysis(cfg, benchmark, results_by_method):
+def monthly_analysis(cfg, benchmark, results_by_method, zone=""):
     """
-    報告区間ステップを月へ写像し、月別平均 MSE をシード集計する。
+    報告区間ステップを月へ写像し、月別平均 MSE をシード集計する(zone 別)。
 
     Returns
     -------
     rows : list[dict]
-    monthly : dict[method] -> (months(sorted), mean_per_month, std_per_month)
+    monthly : dict[label] -> (months(sorted), mean_per_month, std_per_month)
     """
     rows = []
     monthly = {}
@@ -209,10 +324,11 @@ def monthly_analysis(cfg, benchmark, results_by_method):
             mu, sd = mean_std(vals)
             means.append(mu)
             stds.append(sd)
-            rows.append({"task": "gefcom", "method": m,
-                         "metric": "monthly_mse", "level": f"month_{mo:02d}",
-                         "mean": mu, "std": sd})
-        monthly[m] = (all_months, means, stds)
+            rows.append(_row("gefcom", m, "monthly_mse",
+                             level=f"month_{mo:02d}", mean=mu, std=sd,
+                             zone=zone))
+        label = f"{m} z{zone}" if zone != "" else m
+        monthly[label] = (all_months, means, stds)
     return rows, monthly
 
 
@@ -221,31 +337,64 @@ def monthly_analysis(cfg, benchmark, results_by_method):
 # ======================================================================
 def classification_analysis(cfg, results_by_method):
     """
-    報告区間のサンプル単位 probs/labels をシード横断で連結し、
-    Brier / ECE と信頼度図データを返す。
+    報告区間のサンプル単位 probs/labels から **シードごとに** Brier / ECE を
+    算出し、シード横断で mean±SD を報告する(プールしない)。さらに各手法の
+    per-seed ECE / Brier を PF と対応比較する。
+
+    信頼度図 (reliability diagram) の rel_x/rel_y だけは全シードをプールして
+    描く — ここが唯一プールする箇所(ビン内サンプルを増やして図を安定させるため)。
     """
     rows = []
     reliability = {}
+    per_seed_brier = {}   # method -> ndarray(per-seed brier)
+    per_seed_ece = {}     # method -> ndarray(per-seed ece)
+
     for m, results in results_by_method.items():
-        probs = np.concatenate(
-            [np.asarray(r["predictions"].get("probs", []), np.float64)
-             for r in results]) if results else np.empty(0)
-        labels = np.concatenate(
-            [np.asarray(r["predictions"].get("y", []), np.float64)
-             for r in results]) if results else np.empty(0)
-        if probs.size == 0 or labels.size == 0:
-            rows.append({"task": "classification", "method": m,
-                         "metric": "brier", "level": "",
-                         "mean": float("nan"), "std": float("nan")})
-            continue
-        brier, ece, rel_x, rel_y = brier_ece(probs, labels, n_bins=10)
-        reliability[m] = (rel_x, rel_y)
-        rows.append({"task": "classification", "method": m,
-                     "metric": "brier", "level": "",
-                     "mean": float(brier), "std": ""})
-        rows.append({"task": "classification", "method": m,
-                     "metric": "ece", "level": "",
-                     "mean": float(ece), "std": ""})
+        briers, eces = [], []
+        pooled_probs, pooled_labels = [], []
+        for r in results:
+            p = np.asarray(r["predictions"].get("probs", []),
+                           np.float64).ravel()
+            y = np.asarray(r["predictions"].get("y", []), np.float64).ravel()
+            n = min(p.size, y.size)
+            if n == 0:
+                continue
+            p, y = p[:n], y[:n]
+            b, e, _, _ = brier_ece(p, y, n_bins=10)   # ← per seed
+            briers.append(b)
+            eces.append(e)
+            pooled_probs.append(p)
+            pooled_labels.append(y)
+        per_seed_brier[m] = np.asarray(briers, dtype=np.float64)
+        per_seed_ece[m] = np.asarray(eces, dtype=np.float64)
+
+        bmu, bsd = mean_std(briers)
+        emu, esd = mean_std(eces)
+        rows.append(_row("classification", m, "brier", mean=bmu, std=bsd))
+        rows.append(_row("classification", m, "ece", mean=emu, std=esd))
+
+        # 信頼度図は全シードをプールして 1 本(唯一のプール; コメント参照)。
+        if pooled_probs:
+            allp = np.concatenate(pooled_probs)
+            ally = np.concatenate(pooled_labels)
+            _, _, rel_x, rel_y = brier_ece(allp, ally, n_bins=10)
+            reliability[m] = (rel_x, rel_y)
+
+    # PF との per-seed 対応比較(ECE / Brier)。p 値は専用カラムへ。
+    if "PF" in per_seed_ece:
+        for m in results_by_method:
+            if m == "PF":
+                continue
+            for name, store in (("ece", per_seed_ece),
+                                ("brier", per_seed_brier)):
+                a, b = store.get(m), store.get("PF")
+                cmp = paired_compare(a, b)
+                diffs = _paired_diffs(a, b)
+                sd_diff = float(np.std(diffs)) if diffs.size else float("nan")
+                rows.append(_row("classification", m, f"{name}_diff_vs_PF",
+                                 mean_difference=cmp["mean_diff"],
+                                 std_difference=sd_diff,
+                                 paired_t_p=cmp["p"]))
     return rows, reliability
 
 
@@ -336,34 +485,42 @@ def main():
                            cfg["output_dir"], "calibration")
     os.makedirs(out_dir, exist_ok=True)
 
-    # --- 各手法を評価シードで実行(結果を使い回す)---
-    # タイムスタンプ参照用に 1 つ benchmark を作っておく(gefcom 月別で使用)。
-    bench_ref = build_benchmark(cfg)
-    results_by_method = {}
-    for m in methods:
-        params = get_params(selected, m, n_main)
-        bench = build_benchmark(cfg)
-        results_by_method[m] = run_seeds(m, bench, n_main, params, eval_seeds)
-        print(f"[run] {m}: {len(eval_seeds)} seeds done")
-
     rows = []
     curves, monthly, reliability = {}, {}, {}
 
-    if task_type == "regression":
-        rows += coverage_rows(cfg, results_by_method)
-        if bench_name == "gefcom":
-            # 人工スイッチ点なし → 月別性能を回復曲線の代わりに使う。
-            mrows, monthly = monthly_analysis(cfg, bench_ref,
-                                              results_by_method)
+    if task_type == "regression" and bench_name == "gefcom":
+        # GEFCom: 全 zone をループし、grid_search が保存した σ_obs を使う(C2)。
+        # 人工スイッチ点なし → 月別性能を回復曲線の代わりに使う。zone 別に評価。
+        noise_by_zone = selected.get("gefcom_noise", {})
+        zones = cfg["data"]["zones"]
+        for z in zones:
+            ctx = {"zone": z}
+            ns = noise_by_zone.get(str(z))
+            if ns is not None:                 # 無ければベンチマーク既定へフォールバック
+                ctx["noise_std"] = ns
+            res, bench_ref = _run_methods(cfg, selected, methods, n_main,
+                                          eval_seeds, **ctx)
+            rows += coverage_rows(cfg, res, task="gefcom", zone=str(z))
+            mrows, zmonthly = monthly_analysis(cfg, bench_ref, res,
+                                               zone=str(z))
             rows += mrows
-        else:
-            # 既知スイッチ点あり → post-switch 回復曲線。
-            switch_points = list(getattr(bench_ref, "switch_points", []))
-            rrows, curves = recovery_analysis(cfg, results_by_method,
-                                              switch_points)
-            rows += rrows
+            monthly.update(zmonthly)
+            print(f"[zone {z}] 評価完了 (σ_obs={ns})")
+
+    elif task_type == "regression":
+        # 回帰(合成スイッチ): 単一コンテキスト(zone=None)。
+        res, bench_ref = _run_methods(cfg, selected, methods, n_main,
+                                      eval_seeds)
+        rows += coverage_rows(cfg, res, task="regression")
+        # 既知スイッチ点あり → post-switch 回復曲線 + lag 別対応検定(Holm)。
+        switch_points = list(getattr(bench_ref, "switch_points", []))
+        rrows, curves = recovery_analysis(cfg, res, switch_points)
+        rows += rrows
+
     else:
-        crows, reliability = classification_analysis(cfg, results_by_method)
+        # 分類(email): 単一コンテキスト(zone=None)。
+        res, _ = _run_methods(cfg, selected, methods, n_main, eval_seeds)
+        crows, reliability = classification_analysis(cfg, res)
         rows += crows
 
     # --- テーブル書き出し(必ず実行)---
@@ -379,15 +536,29 @@ def main():
         print("[注意] matplotlib 不使用: PNG はスキップ(CSV は出力済み)。")
 
     # --- 概要の表示 ---
+    def _num(v):
+        return v if isinstance(v, float) and np.isfinite(v) else None
+
     print("\n=== 較正レポート概要 ===")
     for r in rows:
         lvl = f" level={r['level']}" if r.get("level") else ""
-        sd = r.get("std", "")
-        sd_s = f" ± {sd:.4f}" if isinstance(sd, float) and np.isfinite(sd) else ""
-        mu = r.get("mean")
-        mu_s = f"{mu:.4f}" if isinstance(mu, float) else str(mu)
+        zn = f" zone={r['zone']}" if r.get("zone") not in ("", None) else ""
+        mu = _num(r.get("mean"))
+        md = _num(r.get("mean_difference"))
+        sd = _num(r.get("std"))
+        pt = _num(r.get("paired_t_p"))
+        pth = _num(r.get("paired_t_p_holm"))
+        if mu is not None:                       # 通常の平均±SD 行
+            val = f"{mu:.4f}" + (f" ± {sd:.4f}" if sd is not None else "")
+        elif md is not None:                     # 差分(PF 比較)行
+            val = f"Δ={md:.4f}"
+            if pt is not None:
+                val += f" (p={pt:.3g}"
+                val += f", p_holm={pth:.3g})" if pth is not None else ")"
+        else:
+            val = str(r.get("mean"))
         print(f"  [{r['task']}] {r['method']:11s} {r['metric']:24s}"
-              f"{lvl}: {mu_s}{sd_s}")
+              f"{lvl}{zn}: {val}")
 
 
 if __name__ == "__main__":

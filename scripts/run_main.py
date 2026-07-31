@@ -13,7 +13,9 @@
 P3: GEFCom は config の zones をすべてループする(単一 zone に潰さない)。
     観測ノイズ σ_obs は選択区間から推定して固定する(--estimate-noise)。
 P6: method × seed × zone ごとに予測・診断・index・timing を完全保存する
-    (metrics.json / predictions.npz / diagnostics.npz / indices.npz / timings.json)。
+    (metrics.npz / predictions.npz / diagnostics.npz / indices.npz /
+     timings.json / meta.json)。予測は報告区間サンプルを flatten して保存し、
+     各サンプルがどのステップ由来かを pred_step_index / pred_offsets で対応づける。
 
 使い方:
     python scripts/run_main.py --benchmark gefcom
@@ -67,15 +69,20 @@ def _save_per_seed(base, method, seed, zone, r, cfg):
 
 
 def _run_one_config(cfg, out_dir, selected, eval_seeds, n_main, methods,
-                    zone=None, estimate_noise=False):
+                    zone=None):
     """1 つの (config, zone) について全手法×全シードを実行し集計行を返す。"""
     overrides = {}
     if zone is not None:
         overrides["zone"] = zone
-    if estimate_noise and cfg["benchmark"] == "gefcom":
-        sigma = estimate_obs_noise(cfg, zone=zone)
+    # GEFCom は grid_search が保存した σ_obs(zone別)を使う。grid と final で
+    # 同じ観測ノイズを使うことで尤度・重み更新の条件を一致させる(C2)。
+    if cfg["benchmark"] == "gefcom":
+        noise_by_zone = selected.get("gefcom_noise", {})
+        sigma = noise_by_zone.get(str(zone))
+        if sigma is None:                       # 後方互換: 未保存なら推定
+            sigma = estimate_obs_noise(cfg, zone=zone)
         overrides["noise_std"] = sigma
-        print(f"  [zone {zone}] 選択区間から推定した σ_obs = {sigma:.4f}")
+        print(f"  [zone {zone}] σ_obs = {sigma:.4f} (grid と共通)")
 
     key = "mse" if cfg["task_type"] == "regression" else "f1"
     rows = []
@@ -99,8 +106,6 @@ def _run_one_config(cfg, out_dir, selected, eval_seeds, n_main, methods,
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--benchmark", required=True)
-    ap.add_argument("--estimate-noise", action="store_true",
-                    help="GEFCom の σ_obs を選択区間から推定して固定(P3)")
     args = ap.parse_args()
 
     cfg = load_config(args.benchmark)
@@ -117,8 +122,7 @@ def main():
     if zones:
         for z in zones:
             all_rows += _run_one_config(
-                cfg, out_dir, selected, eval_seeds, n_main, methods,
-                zone=z, estimate_noise=args.estimate_noise)
+                cfg, out_dir, selected, eval_seeds, n_main, methods, zone=z)
     else:
         all_rows += _run_one_config(
             cfg, out_dir, selected, eval_seeds, n_main, methods)

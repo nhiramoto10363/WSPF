@@ -26,9 +26,28 @@ import argparse
 import json
 import os
 
-from _common import (load_config, resolve_seeds, grid_search, hp_path)
+from _common import (load_config, resolve_seeds, grid_search, hp_path,
+                     estimate_obs_noise)
 
 FILTER_METHODS = ["PF", "WSPF-A", "WSPF-B"]
+
+
+def _gefcom_contexts(cfg):
+    """GEFCom の zone 別コンテキストと観測ノイズを構築する(C2/C3)。
+
+    観測ノイズ σ_obs は各 zone の選択区間から **一度だけ** 推定して固定し、
+    grid_search と run_main/calibration の両方で同じ値を使えるよう保存する。
+    HP は全 zone の選択区間平均で共通選択する(共通 HP)。
+    """
+    zones = cfg.get("data", {}).get("zones", [1])
+    noise_by_zone = {}
+    contexts = []
+    for z in zones:
+        sigma = estimate_obs_noise(cfg, zone=z)
+        noise_by_zone[str(z)] = sigma
+        contexts.append({"zone": z, "noise_std": sigma})
+        print(f"  [zone {z}] 選択区間から推定した σ_obs = {sigma:.4f}")
+    return contexts, noise_by_zone
 
 
 def main():
@@ -47,13 +66,20 @@ def main():
 
     result = {"by_n_particles": {}, "no_n": {}}
 
+    # GEFCom: zone 別に σ_obs を推定・保存し、全 zone 平均で共通 HP を選ぶ(C2/C3)
+    contexts = None
+    if cfg["benchmark"] == "gefcom":
+        print("[gefcom: 選択区間から σ_obs を推定]")
+        contexts, noise_by_zone = _gefcom_contexts(cfg)
+        result["gefcom_noise"] = noise_by_zone
+
     # 粒子フィルタ: 既定は N=main のみ(主分析)。--tune-all-n で全 N(Supplement)。
     target_ns = n_sweep if args.tune_all_n else [n_main]
     for n in target_ns:
         print(f"[N={n}]")
         result["by_n_particles"][str(n)] = {}
         for m in FILTER_METHODS:
-            best, score = grid_search(m, cfg, n, sel)
+            best, score = grid_search(m, cfg, n, sel, contexts=contexts)
             result["by_n_particles"][str(n)][m] = best
 
     # 点推定ベースライン(N を持たない): N=main で選択。
@@ -62,7 +88,7 @@ def main():
                     if m in ("SGD", "PH-SGD", "Window-SGD")]
     print("[baselines (no N)]")
     for m in base_methods:
-        best, score = grid_search(m, cfg, n_main, sel)
+        best, score = grid_search(m, cfg, n_main, sel, contexts=contexts)
         result["no_n"][m] = best
 
     out = hp_path(cfg)

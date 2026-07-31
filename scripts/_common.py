@@ -93,17 +93,24 @@ def region_mask(result, region):
 
     region='selection' → 選択区間(HP選択)、'report' → 報告区間(最終評価)、
     'all' → 全ステップ。いずれも straddle(切替をまたぐブロック)は除外する。
+
+    選択/報告区間が空のときは **黙って全区間へ戻さず例外を投げる**
+    (リーク防止の意図と逆になるため, 修正方針 C1)。設定ミス(eval_start が
+    T 以上、report_start がストリーム長を超える 等)を早期に検出する。
     """
     n = len(next(iter(result["metrics"].values())))
     if region == "selection":
         mask = np.asarray(result.get("selection_mask", np.zeros(n, bool)))
     elif region == "report":
-        mask = np.asarray(result.get("report_mask", np.ones(n, bool)))
+        mask = np.asarray(result.get("report_mask", np.zeros(n, bool)))
+    elif region == "all":
+        mask = np.ones(n, dtype=bool)
     else:
-        mask = np.ones(n, dtype=bool)
-    # 万一どの区間も立っていない設定でも空にならないようフォールバック
-    if not mask.any():
-        mask = np.ones(n, dtype=bool)
+        raise ValueError(f"unknown region: {region!r}")
+    if region in ("selection", "report") and not mask.any():
+        raise ValueError(
+            f"region '{region}' にサンプルがありません(空マスク)。"
+            f"eval_start / report_start とストリーム長の設定を確認してください。")
     mask = mask & ~np.asarray(result.get("straddle_mask", np.zeros(n, bool)))
     return mask
 
@@ -176,17 +183,26 @@ def _is_boundary(best, grid):
     return hits
 
 
-def grid_search(method, cfg, n_particles, selection_seeds, emit=print):
-    """選択シード平均で最良パラメータを返す。端点採択時は警告する。"""
+def grid_search(method, cfg, n_particles, selection_seeds, emit=print,
+                contexts=None):
+    """選択区間スコアで最良パラメータを返す。端点採択時は警告する。
+
+    contexts: ベンチマーク構築の override 辞書のリスト(例: GEFCom の
+    [{'zone':1,'noise_std':..}, {'zone':2,..}, ..])。複数指定すると
+    その **全コンテキスト×選択シードの平均** 選択区間スコアで選ぶ
+    (GEFCom の 3zone 平均による共通 HP 選択, C3)。既定は単一 [{}]。
+    """
     grid = cfg["grid"]
+    contexts = contexts or [{}]
     best, best_score = None, np.inf
     for params in _param_grid(method, grid):
         scores = []
-        for s in selection_seeds:
-            bench = build_benchmark(cfg)
-            r = run_method(method, bench, n_particles, params, seed=s,
-                           collect_diagnostics=False)
-            scores.append(primary_score(r, cfg))
+        for ctx in contexts:
+            for s in selection_seeds:
+                bench = build_benchmark(cfg, **ctx)
+                r = run_method(method, bench, n_particles, params, seed=s,
+                               collect_diagnostics=False)
+                scores.append(primary_score(r, cfg, region="selection"))
         sc = float(np.nanmean(scores))
         if sc < best_score:
             best_score, best = sc, dict(params)

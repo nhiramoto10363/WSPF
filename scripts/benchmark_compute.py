@@ -34,9 +34,10 @@ DIM_SWEEP = {
     "regression": [8, 16, 32, 64],
     "gefcom": [16, 32, 64, 128],
 }
-# メモリ/次元スイープ計測時のストリーム上限(回帰は T を縮めて高速化)
+# メモリ/次元スイープ計測時のストリーム上限。max_steps でループ自体を打ち切る
+# ため、gefcom を含む全ベンチマークがこのステップ数で確実に停止する。
 MEM_CAP_T = 80
-DIM_CAP_STEPS = 40   # gefcom は全ストリームだが先頭 ~40 ステップのみ計時
+DIM_CAP_STEPS = 40   # 次元スイープは先頭 DIM_CAP_STEPS ステップで停止して計時
 
 
 # ======================================================================
@@ -53,22 +54,47 @@ def _peak_mem_mb(fn):
     return out, peak / 1e6
 
 
-def _capped_timing(history, cap=DIM_CAP_STEPS, warmup=5):
-    """history の先頭区間 [warmup:cap] から t_step/t_correction の平均 ms を返す。"""
-    out = {}
-    for k in ("t_step", "t_correction"):
-        arr = np.asarray(history.get(k, []), dtype=np.float64)
-        arr = arr[warmup:cap] if arr.size > warmup else arr
-        out[k] = 1e3 * float(np.nanmean(arr)) if arr.size else float("nan")
-    return out
+def _capped_timing(history, warmup=5):
+    """max_steps でループ自体が既に打ち切られているので、短い history をそのまま
+    timing_report で集計する(先頭 warmup ステップのみ除外)。"""
+    tr = timing_report(history or {}, warmup=warmup)
+    return {"t_step": tr.get("t_step", {}).get("mean_ms", np.nan),
+            "t_correction": tr.get("t_correction", {}).get("mean_ms",
+                                                           np.nan)}
 
 
 def _static_lowrank_mb(method, benchmark, n_particles):
-    """WSPF-A の EMA バッファ ema_m(N×d)の静的メモリ見積り MB。他は空。"""
+    """WSPF-A の低ランク補正(Woodbury 経路)が確保する float64 バッファの静的
+    メモリ見積り MB を内訳付きで返す。他手法は空 dict。
+
+    含めるバッファ(いずれも float64 = 8 byte):
+      - EMA 状態 ema_m            : N×d
+      - 粒子配列 particles        : N×d
+      - サンプル毎の勾配偏差 W     : N×B×d
+      - B×B 小行列 (M / G)        : N×B×B
+      - solve 用の一時バッファ     : N×B×d
+    """
     if method != "WSPF-A":
-        return ""
+        return {}
     d = int(getattr(benchmark, "param_dim", 0))
-    return float(n_particles * d * 8) / 1e6   # float64 = 8 byte
+    B = int(getattr(benchmark, "batch_size", 16))
+    N = int(n_particles)
+    bytes_f64 = 8
+
+    ema_mb = float(N * d * bytes_f64) / 1e6            # ema_m: N×d
+    particles_mb = float(N * d * bytes_f64) / 1e6      # particles: N×d
+    deviations_mb = float(N * B * d * bytes_f64) / 1e6  # W: N×B×d
+    bxb_mb = float(N * B * B * bytes_f64) / 1e6        # M / G: N×B×B
+    solve_mb = float(N * B * d * bytes_f64) / 1e6      # solve 一時: N×B×d
+    total_mb = ema_mb + particles_mb + deviations_mb + bxb_mb + solve_mb
+    return {
+        "static_ema_MB": ema_mb,
+        "static_particles_MB": particles_mb,
+        "static_deviations_MB": deviations_mb,
+        "static_BxB_MB": bxb_mb,
+        "static_solve_MB": solve_mb,
+        "static_total_MB": total_mb,
+    }
 
 
 # ======================================================================
@@ -124,17 +150,19 @@ def main():
     # (c) ピークメモリ (R1-11): 各フィルタ手法を N=main・小ストリームで1回計測。
     for m in FILTER_METHODS:
         params = get_params(selected, m, n_main)
-        # 回帰は T を縮めて高速化(gefcom は T を受け付けないので無視される)。
+        # T=MEM_CAP_T は回帰の回帰用に残す(gefcom は無視)が、実際の打ち切りは
+        # max_steps で保証する(gefcom も先頭 MEM_CAP_T ステップで停止)。
         bench = build_benchmark(cfg, T=MEM_CAP_T)
 
         def _run():
             return run_method(m, bench, n_main, params, seed=0,
-                              collect_diagnostics=True)
+                              collect_diagnostics=True, max_steps=MEM_CAP_T)
 
         r, peak_mb = _peak_mem_mb(_run)
-        rows.append({"method": m, "N": n_main, "section": "peak_mem",
-                     "peak_mem_MB": peak_mb,
-                     "static_lowrank_MB": _static_lowrank_mb(m, bench, n_main)})
+        row = {"method": m, "N": n_main, "section": "peak_mem",
+               "peak_mem_MB": peak_mb}
+        row.update(_static_lowrank_mb(m, bench, n_main))  # 内訳を行に展開
+        rows.append(row)
         print(f"{m:7s} N={n_main:4d} peak_mem={peak_mb:.2f} MB")
 
     out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)),
@@ -161,13 +189,15 @@ def dim_sweep(cfg, bench_name, selected, n_main):
     for h in hidden_dims:
         for m in ("WSPF-A", "WSPF-B"):
             params = get_params(selected, m, n_main)
-            # 回帰は T を縮める(gefcom は無視される→全ストリームだが先頭のみ計時)。
+            # T=MEM_CAP_T は回帰用に残すが、実際の打ち切りは max_steps で保証する
+            # (gefcom も先頭 DIM_CAP_STEPS ステップでループを停止)。
             bench = build_benchmark(cfg, hidden_dim=h, T=MEM_CAP_T)
             d = int(bench.param_dim)
 
             def _run():
                 return run_method(m, bench, n_main, params, seed=0,
-                                  collect_diagnostics=True)
+                                  collect_diagnostics=True,
+                                  max_steps=DIM_CAP_STEPS)
 
             r, peak_mb = _peak_mem_mb(_run)
             hist = r.get("history") or {}
