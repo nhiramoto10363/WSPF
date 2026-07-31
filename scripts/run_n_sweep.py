@@ -20,7 +20,8 @@ import os
 import numpy as np
 
 from _common import (load_config, resolve_seeds, build_benchmark,
-                     load_selected, get_params, region_mask, benchmark_contexts)
+                     load_selected, get_params, region_mask, benchmark_contexts,
+                     masked_history)
 from src.evaluation import (run_seeds, save_run_dir, mean_std,
                             summarize_history, timing_report)
 
@@ -55,21 +56,48 @@ def main():
                 params = get_params(selected, m, n) if args.tuned_per_n else params_fixed
                 bench = build_benchmark(cfg, **ctx)
                 results = run_seeds(m, bench, n, params, eval_seeds)
-                vals, ess_frac, resamp = [], [], []
+                # R2-2: weight degeneracy + runtime も report 区間で集計する。
+                acc = {k: [] for k in (
+                    "val", "ess_over_N", "entropy_norm", "max_weight",
+                    "spread", "unique_all", "unique_resampled",
+                    "resample_rate", "t_step_ms")}
                 for r in results:
-                    mask = region_mask(r, "report")
-                    vals.append(np.nanmean(np.asarray(r["metrics"][key])[mask]))
+                    mask = region_mask(r, "report")   # straddle 除外済み
+                    acc["val"].append(np.nanmean(np.asarray(r["metrics"][key])[mask]))
                     if r.get("history"):
-                        d = summarize_history(r["history"])
-                        ess_frac.append(d["pre_resample"].get("ess", np.nan) / n)
-                        resamp.append(d["post_resample"].get("resample_rate", np.nan))
-                mu, sd = mean_std(vals)
+                        hr = masked_history(r["history"], mask)  # report 区間に限定
+                        d = summarize_history(hr)
+                        pre, post = d["pre_resample"], d["post_resample"]
+                        acc["ess_over_N"].append(pre.get("ess", np.nan) / n)
+                        # エントロピーは N 依存を除くため logN で正規化
+                        acc["entropy_norm"].append(pre.get("entropy", np.nan) / np.log(n))
+                        acc["max_weight"].append(pre.get("max_weight", np.nan))
+                        acc["spread"].append(pre.get("spread_trace", np.nan))
+                        acc["unique_all"].append(post.get("unique_ancestor_rate_all", np.nan))
+                        acc["unique_resampled"].append(
+                            post.get("unique_ancestor_rate_resample", np.nan))
+                        acc["resample_rate"].append(post.get("resample_rate", np.nan))
+                        acc["t_step_ms"].append(
+                            timing_report(hr).get("t_step", {}).get("mean_ms", np.nan))
+                mu, sd = mean_std(acc["val"])
+
+                def _m(k):
+                    v = acc[k]
+                    return float(np.nanmean(v)) if v and np.any(np.isfinite(v)) else None
+
                 rows.append({"method": m, "N": n, "zone": zone, "metric": key,
                              "mean": mu, "std": sd,
-                             "ess_over_N": float(np.nanmean(ess_frac)) if ess_frac else None,
-                             "resample_rate": float(np.nanmean(resamp)) if resamp else None})
+                             "ess_over_N": _m("ess_over_N"),
+                             "entropy_norm": _m("entropy_norm"),
+                             "max_weight": _m("max_weight"),
+                             "particle_spread": _m("spread"),
+                             "unique_ancestor_rate_all": _m("unique_all"),
+                             "unique_ancestor_rate_resampled": _m("unique_resampled"),
+                             "resample_rate": _m("resample_rate"),
+                             "t_step_ms": _m("t_step_ms")})
                 ztag = f"[zone {zone}] " if zone is not None else ""
-                print(f"{ztag}{m:8s} N={n:4d}  {key}={mu:.4f}±{sd:.4f}")
+                print(f"{ztag}{m:8s} N={n:4d}  {key}={mu:.4f}±{sd:.4f} "
+                      f"ESS/N={_m('ess_over_N')}")
 
     out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                            cfg["output_dir"], "n_sweep")

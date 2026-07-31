@@ -116,6 +116,23 @@ def region_mask(result, region):
     return mask
 
 
+def masked_history(history, mask):
+    """フィルタ履歴を time 軸マスクで切り出す(診断量を report 区間に限定, F2)。
+
+    先頭軸長がマスク長と一致する配列だけをマスクし、それ以外(スカラー等)は
+    そのまま返す。rho のような (T, N) 配列は (n_report, N) になる。
+    """
+    mask = np.asarray(mask, dtype=bool)
+    out = {}
+    for key, value in history.items():
+        arr = np.asarray(value)
+        if arr.ndim >= 1 and arr.shape[0] == mask.size:
+            out[key] = arr[mask]
+        else:
+            out[key] = arr
+    return out
+
+
 def primary_score(result, cfg, region="selection"):
     """1 実行結果からスカラー主要指標を返す(小さいほど良い方向に符号統一)。
 

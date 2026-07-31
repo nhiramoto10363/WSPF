@@ -150,7 +150,7 @@ def run_method(method, benchmark, n_particles, params, seed,
     -------
     dict {
       "metrics": {metric_name: (T,) ndarray},
-      "straddle_mask": (T,) bool,    # ブロックが切替をまたぐ(全体集計に含めてよい)
+      "straddle_mask": (T,) bool,    # 切替をまたぐ(全報告指標・switch整合解析から除外)
       "switch_mask": (T,) bool,      # 既知の切替時点そのもの(回復解析の起点)
       "selection_mask": (T,) bool,   # 選択区間(HP選択の集計対象)
       "report_mask": (T,) bool,      # 報告区間(最終評価の集計対象)
@@ -208,6 +208,10 @@ def run_method(method, benchmark, n_particles, params, seed,
         Xtr, ytr = stp.X_train, stp.y_train
         has_test = Xte is not None and np.asarray(Xte).shape[0] > 0
 
+        # report 区間かつ straddle でないブロックのみ、サンプル単位予測を
+        # 保存対象にする(較正 Brier/ECE/reliability から straddle を除外, F3)。
+        is_reported_block = bool(stp.is_report_step) and not bool(stp.straddles_switch)
+
         # -------- 1) 評価(学習前) --------
         particles, weights = _predict_particles_weights(method, estimator)
         if has_test:
@@ -225,7 +229,7 @@ def run_method(method, benchmark, n_particles, params, seed,
                     _push(f"coverage_{lvl:.2f}", cw[lvl]["coverage"])
                     _push(f"width_{lvl:.2f}", cw[lvl]["width"])
                 primary_err = M.test_mse(yte_arr, pred_mean)
-                if stp.is_report_step:
+                if is_reported_block:
                     rep_y.append(yte_arr)
                     rep_mean.append(np.asarray(pred_mean, np.float64).ravel())
                     rep_std.append(np.asarray(pred_std, np.float64).ravel())
@@ -243,7 +247,7 @@ def run_method(method, benchmark, n_particles, params, seed,
                 _push("nll", M.nll_bernoulli(probs, yte_arr))
                 _push("brier", float(np.mean((probs - yte_arr) ** 2)))
                 primary_err = 1.0 - M.accuracy(hard, yte_arr)
-                if stp.is_report_step:
+                if is_reported_block:
                     rep_probs.append(np.asarray(probs, np.float64).ravel())
                     rep_y.append(yte_arr)
                     rep_block_step.append(int(stp.step_index))

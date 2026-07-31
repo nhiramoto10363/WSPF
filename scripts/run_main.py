@@ -35,31 +35,41 @@ from src.evaluation import (run_method, save_run_dir, mean_std, sanitize,
 
 _REPO = os.path.dirname(os.path.dirname(__file__))
 
-# R1-9 で集約する診断量(report区間平均)のキー
+# R1-9 で集約する診断量(report区間平均)のキー。ユニーク祖先率は
+# 「全ステップ平均」と「リサンプリング実行時のみ平均」を分ける(査読要件, F3)。
 _DIAG_KEYS = ["ess_over_N", "weight_entropy", "max_weight",
-              "particle_spread", "unique_ancestor_rate", "resample_rate"]
+              "particle_spread", "unique_ancestor_rate_all",
+              "unique_ancestor_rate_resampled", "resample_rate"]
 
 
-def _report_diag(history, report_mask, n_particles):
-    """フィルタ履歴から report 区間平均の R1-9 診断量を返す(M3)。
+def _report_diag(history, mask, n_particles):
+    """フィルタ履歴から report 区間(straddle 除外)平均の R1-9 診断量を返す。
 
+    mask は region_mask(r,"report") 済み(straddle 除外)を渡すこと(F3)。
     測定時点は固定(重み正規化後・リサンプリング前: ess/entropy/max_weight/
-    spread、リサンプリング後: resampled/unique)。report_mask で報告区間のみ集計。
+    spread、リサンプリング後: resampled/unique)。ユニーク祖先率は全ステップ平均と
+    リサンプリング実行時のみ平均に分ける。
     """
-    m = np.asarray(report_mask, bool)
+    m = np.asarray(mask, bool)
 
-    def rmean(key):
+    def rmean(key, sel=None):
         a = np.asarray(history.get(key, []), dtype=float)
-        if a.size != m.size or not m.any():
+        if a.size != m.size:
             return float("nan")
-        return float(np.nanmean(a[m]))
+        idx = m if sel is None else (m & sel)
+        return float(np.nanmean(a[idx])) if idx.any() else float("nan")
+
+    resampled = np.asarray(history.get("resampled", []), dtype=bool)
+    resampled = resampled if resampled.size == m.size else np.zeros(m.size, bool)
 
     return {
         "ess_over_N": rmean("ess") / n_particles,
         "weight_entropy": rmean("entropy"),
         "max_weight": rmean("max_weight"),
         "particle_spread": rmean("spread_trace"),
-        "unique_ancestor_rate": rmean("unique_particles") / n_particles,
+        "unique_ancestor_rate_all": rmean("unique_particles") / n_particles,
+        "unique_ancestor_rate_resampled": (
+            rmean("unique_particles", sel=resampled) / n_particles),
         "resample_rate": rmean("resampled"),
     }
 
@@ -125,10 +135,11 @@ def _run_one_config(cfg, out_dir, selected, eval_seeds, n_main, methods,
         for s in eval_seeds:
             bench = build_benchmark(cfg, **overrides)
             r = run_method(m, bench, n_main, params, s, collect_diagnostics=True)
-            mask = region_mask(r, "report")
+            mask = region_mask(r, "report")   # straddle 除外済み
             vals.append(np.nanmean(np.asarray(r["metrics"][key])[mask]))
             if r.get("history"):
-                diags.append(_report_diag(r["history"], r["report_mask"], n_main))
+                # straddle 除外後の mask を渡す(生 report_mask ではない, F3)
+                diags.append(_report_diag(r["history"], mask, n_main))
             _save_per_seed(out_dir, m, s, zone, r, cfg)
         per_seed[m] = vals
         mu, sd = mean_std(vals)

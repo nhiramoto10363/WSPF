@@ -18,7 +18,8 @@ import os
 import numpy as np
 
 from _common import (load_config, resolve_seeds, build_benchmark,
-                     load_selected, get_params, region_mask, benchmark_contexts)
+                     load_selected, get_params, region_mask, benchmark_contexts,
+                     masked_history)
 from src.evaluation import (run_seeds, save_run_dir, mean_std,
                             summarize_history, rho_report)
 
@@ -57,10 +58,12 @@ def main():
                 mask = region_mask(r, "report")
                 mses.append(np.nanmean(np.asarray(r["metrics"]["mse"])[mask]))
                 if r.get("history"):
-                    d = summarize_history(r["history"])
+                    # 診断量も report 区間に限定する(selection混入を防ぐ, F2)
+                    hr = masked_history(r["history"], mask)
+                    d = summarize_history(hr)
                     ess.append(d["pre_resample"].get("ess", np.nan) / n)
                     resamp.append(d["post_resample"].get("resample_rate", np.nan))
-                    rr = rho_report(r["history"]) or {}
+                    rr = rho_report(hr) or {}
                     q50.append(rr.get("q50", np.nan))
                     q90v.append(rr.get("q90", np.nan))
                     q99v.append(rr.get("q99", np.nan))
@@ -69,9 +72,8 @@ def main():
                     p99.append(rr.get("p_gt_0.99", np.nan))
                     cnt = rr.get("rho_clip_count", np.nan)
                     clip.append(cnt)
-                    # クリップ「頻度」= 回数 / (粒子数 × 評価ステップ数) (R1-8)
-                    n_steps = int(np.asarray(r["history"].get("ess", [])).size)
-                    denom = n * max(n_steps, 1)
+                    # クリップ「頻度」= 回数 / (粒子数 × report評価ステップ数) (R1-8)
+                    denom = n * max(int(mask.sum()), 1)
                     cliprate.append(cnt / denom if np.isfinite(cnt) else np.nan)
                     nonf.append(rr.get("logcorr_nonfinite_count", np.nan))
             mu, sd = mean_std(mses)
