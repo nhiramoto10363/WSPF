@@ -373,21 +373,26 @@ def run_method(method, benchmark, n_particles, params, seed,
 
 
 def run_seeds(method, benchmark, n_particles, params, seeds,
-              collect_diagnostics=True, n_workers=None):
+              collect_diagnostics=True, n_workers=None, filter_seeds=None):
     """複数シードで run_method を実行し、per-seed 結果 dict のリストを返す。
 
     seed 間は独立なのでプロセス並列できる。n_workers を指定するか環境変数
     WSPF_NUM_WORKERS / NCPUS で並列数を決める(既定は利用可能コア数)。
     結果は seeds の順序を保って返す(並列でも決定的)。プール生成に失敗する
     環境では自動的に逐次へフォールバックする。
+
+    filter_seeds: seeds と同じ長さのリスト。各実行の filter_seed を明示指定する
+    (Oracle の共通乱数 CRN 用)。None なら method 別オフセット規約を使う。
     """
     seeds = list(seeds)
+    fseeds = list(filter_seeds) if filter_seeds is not None else [None] * len(seeds)
     workers = resolve_workers(len(seeds), n_workers)
 
     def _seq():
         return [run_method(method, benchmark, n_particles, params, s,
-                           collect_diagnostics=collect_diagnostics)
-                for s in seeds]
+                           collect_diagnostics=collect_diagnostics,
+                           filter_seed=fs)
+                for s, fs in zip(seeds, fseeds)]
 
     if workers <= 1:
         return _seq()
@@ -395,7 +400,8 @@ def run_seeds(method, benchmark, n_particles, params, seeds,
         with ProcessPoolExecutor(max_workers=workers,
                                  initializer=_init_worker) as ex:
             futs = [ex.submit(run_method, method, benchmark, n_particles,
-                              params, s, collect_diagnostics) for s in seeds]
+                              params, s, collect_diagnostics, fs)
+                    for s, fs in zip(seeds, fseeds)]
             return [f.result() for f in futs]
     except Exception as e:  # プール不可の環境では逐次に退避
         print(f"[run_seeds] 並列実行に失敗({e!r})→逐次にフォールバック")

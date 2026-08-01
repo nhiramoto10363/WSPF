@@ -1,0 +1,6 @@
+{
+  "method": "SGD",
+  "seed": 3,
+  "zone": 1,
+  "n_resets": 0
+}

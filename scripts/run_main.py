@@ -29,7 +29,7 @@ import numpy as np
 
 from _common import (load_config, resolve_seeds, build_benchmark,
                      load_selected, get_params, region_mask, estimate_obs_noise)
-from src.evaluation import (run_method, save_run_dir, mean_std, sanitize,
+from src.evaluation import (run_seeds, save_run_dir, mean_std, sanitize,
                             write_json, summarize_history, timing_report,
                             paired_compare, wilcoxon_signed)
 
@@ -131,10 +131,12 @@ def _run_one_config(cfg, out_dir, selected, eval_seeds, n_main, methods,
     per_seed = {}       # method -> [report指標(seed別)]  (paired test 用, M2)
     for m in methods:
         params = get_params(selected, m, n_main)
+        # seed 間はプロセス並列(run_seeds)。ベンチマークは seed 非依存なので
+        # 1 度だけ構築して渡す(build_functions(seed) が seed 別データを生成)。
+        bench = build_benchmark(cfg, **overrides)
+        results = run_seeds(m, bench, n_main, params, eval_seeds)
         vals, diags = [], []
-        for s in eval_seeds:
-            bench = build_benchmark(cfg, **overrides)
-            r = run_method(m, bench, n_main, params, s, collect_diagnostics=True)
+        for s, r in zip(eval_seeds, results):
             mask = region_mask(r, "report")   # straddle 除外済み
             vals.append(np.nanmean(np.asarray(r["metrics"][key])[mask]))
             if r.get("history"):

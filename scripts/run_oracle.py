@@ -30,7 +30,7 @@ import numpy as np
 
 from _common import (load_config, resolve_seeds, build_benchmark,
                      load_selected, get_params, region_mask)
-from src.evaluation import (run_method, save_run_dir, mean_std, paired_compare)
+from src.evaluation import (run_seeds, save_run_dir, mean_std, paired_compare)
 
 METHODS = ["PF", "Oracle", "WSPF-A", "WSPF-B"]
 SHARED_KEYS = ("eta", "sigma_sys", "prior_std")
@@ -60,12 +60,12 @@ def main():
             params["beta"] = a.get("beta", 0.9)
         # P4: 勾配クリッピング無効化(厳密補正の検証)
         bench = build_benchmark(cfg, grad_clip_norm=None)
-        vals = []
-        for s in eval_seeds:
-            # CRN: 全手法で同一の filter_seed(初期粒子・ドリフトノイズ共有)
-            r = run_method(m, bench, n, params, s, filter_seed=s + 1)
-            mask = region_mask(r, "report")
-            vals.append(np.nanmean(np.asarray(r["metrics"]["mse"])[mask]))
+        # CRN: 全手法で同一の filter_seed(初期粒子・ドリフトノイズ共有)。
+        # seed 間はプロセス並列(Oracle は MC が重いので特に効く)。
+        fseeds = [s + 1 for s in eval_seeds]
+        results = run_seeds(m, bench, n, params, eval_seeds, filter_seeds=fseeds)
+        vals = [np.nanmean(np.asarray(r["metrics"]["mse"])[region_mask(r, "report")])
+                for r in results]
         per_seed[m] = vals
         mu, sd = mean_std(vals)
         rows.append({"method": m, "metric": "mse", "mean": mu, "std": sd})

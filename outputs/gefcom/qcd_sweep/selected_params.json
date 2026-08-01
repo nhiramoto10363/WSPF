@@ -1,0 +1,46 @@
+{
+  "by_n_particles": {
+    "100": {
+      "PF": {
+        "eta": 0.01,
+        "sigma_sys": 0.01,
+        "prior_std": 0.1
+      },
+      "WSPF-A": {
+        "eta": 0.005,
+        "sigma_sys": 0.01,
+        "prior_std": 0.1,
+        "beta": 0.9
+      },
+      "WSPF-B": {
+        "eta": 0.01,
+        "sigma_sys": 0.01,
+        "prior_std": 0.1
+      }
+    }
+  },
+  "no_n": {
+    "SGD": {
+      "eta": 0.05,
+      "prior_std": 0.01
+    },
+    "PH-SGD": {
+      "eta": 0.05,
+      "prior_std": 0.01,
+      "ph_delta": 0.005,
+      "ph_lambda": 2.0,
+      "ph_alpha": 0.9999
+    },
+    "Window-SGD": {
+      "eta": 0.05,
+      "prior_std": 0.01,
+      "window": 10,
+      "n_passes": 2
+    }
+  },
+  "gefcom_noise": {
+    "1": 0.3278560673111229,
+    "2": 0.31152334144453253,
+    "3": 0.3341757449972417
+  }
+}
