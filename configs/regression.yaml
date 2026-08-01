@@ -48,7 +48,12 @@ grid:
 
 # --- 評価 ---
 eval:
-  eval_start: 50
+  eval_start: 50           # 報告区間の開始(最終評価は t>=50)
+  # HP選択のスコア集計区間 [select_start, select_end)。最初のレジームチェンジ
+  # (t=100)を中心に前後50ステップ = [50,150)。定常のみで η が過小選択される
+  # 問題(切替なしデータへの過剰適合)を回避するため、切替を含む窓で選ぶ。
+  select_start: 50
+  select_end: 150
   post_switch_lag: 10      # 切替後 N ステップを post-switch とする
   coverage_levels: [0.5, 0.8, 0.9, 0.95]
 

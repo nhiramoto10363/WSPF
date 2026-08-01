@@ -207,6 +207,9 @@ def run_method(method, benchmark, n_particles, params, seed,
     predict_fn = funcs["predict_fn"]
     task_type = benchmark.task_type
     is_reg = task_type == "regression"
+    # 分類のうちクラス数 > 2 を多クラス(INSECTS)として扱う。
+    n_classes = int(getattr(benchmark, "n_classes", 2))
+    is_multiclass = (not is_reg) and n_classes > 2
     obs_sigma = float(funcs.get("obs_sigma", 0.0)) if is_reg else 0.0
     levels = (0.5, 0.8, 0.9, 0.95)
 
@@ -249,7 +252,24 @@ def run_method(method, benchmark, n_particles, params, seed,
 
         # -------- 1) 評価(学習前) --------
         particles, weights = _predict_particles_weights(method, estimator)
-        if has_test:
+        if has_test and is_multiclass:
+            # 多クラス: 粒子ごとの確率 (N,B,C) を重み平均 → (B,C) → argmax。
+            yint = np.asarray(yte, dtype=np.int64).ravel()
+            probs = M.weighted_prediction_proba(
+                predict_fn, particles, weights, Xte)
+            hard = probs.argmax(axis=1).astype(np.float64)
+            _push("accuracy", M.accuracy(hard, yint))
+            _push("f1", M.macro_f1(hard, yint, n_classes))       # 主要指標
+            _push("macro_f1", M.macro_f1(hard, yint, n_classes))
+            _push("nll", M.nll_categorical(probs, yint))
+            _push("brier", M.brier_multiclass(probs, yint, n_classes))
+            primary_err = 1.0 - M.accuracy(hard, yint)
+            if is_reported_block:
+                rep_probs.append(np.asarray(probs, np.float64))   # (B, C)
+                rep_y.append(yint.astype(np.float64))
+                rep_block_step.append(int(stp.step_index))
+                rep_block_len.append(int(yint.size))
+        elif has_test:
             pred_mean, pred_var = M.weighted_prediction(
                 predict_fn, particles, weights, Xte)
             yte_arr = np.asarray(yte, dtype=np.float64).ravel()
@@ -295,6 +315,9 @@ def run_method(method, benchmark, n_particles, params, seed,
                 for lvl in levels:
                     _push(f"coverage_{lvl:.2f}", float("nan"))
                     _push(f"width_{lvl:.2f}", float("nan"))
+            elif is_multiclass:
+                for name in ("accuracy", "f1", "macro_f1", "nll", "brier"):
+                    _push(name, float("nan"))
             else:
                 for name in ("accuracy", "f1", "balanced_accuracy", "nll", "brier"):
                     _push(name, float("nan"))

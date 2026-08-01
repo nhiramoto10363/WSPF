@@ -13,12 +13,14 @@ from src.benchmarks.base import Benchmark, StreamStep
 from src.benchmarks.regression_switch import RegressionSwitchBenchmark
 from src.benchmarks.gefcom import GefcomBenchmark
 from src.benchmarks.email import EmailBenchmark
+from src.benchmarks.insects import InsectsBenchmark
 
 # 名前 → クラスの対応
 _BENCHMARKS = {
     "regression": RegressionSwitchBenchmark,
     "gefcom": GefcomBenchmark,
     "email": EmailBenchmark,
+    "insects": InsectsBenchmark,
 }
 
 
@@ -50,5 +52,6 @@ __all__ = [
     "RegressionSwitchBenchmark",
     "GefcomBenchmark",
     "EmailBenchmark",
+    "InsectsBenchmark",
     "get_benchmark",
 ]

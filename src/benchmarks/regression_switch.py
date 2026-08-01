@@ -76,7 +76,7 @@ class RegressionSwitchBenchmark(Benchmark):
     def __init__(self, T=500, batch_size=16, test_size=200, noise_std=0.5,
                  hidden_dim=8, input_dim=1, within_regime_drift=0.0005,
                  grad_clip_norm=5.0, oracle_samples=ORACLE_SAMPLES,
-                 eval_start=50):
+                 eval_start=50, select_start=50, select_end=150):
         self.T = int(T)
         self.batch_size = int(batch_size)
         self.test_size = int(test_size)
@@ -87,9 +87,14 @@ class RegressionSwitchBenchmark(Benchmark):
         # None なら勾配クリッピング無効(Oracle/R1-6 の整合用)
         self.grad_clip_norm = None if grad_clip_norm is None else float(grad_clip_norm)
         self.oracle_samples = int(oracle_samples)
-        # 選択区間(ウォームアップ): step < eval_start は HP選択にも最終評価にも
-        # スコア集計しない(連続に処理はする)。R1-13。
+        # 報告区間(最終評価): step >= eval_start。step < eval_start はウォームアップ
+        # として連続処理はするがスコア集計しない。R1-13。
         self.eval_start = int(eval_start)
+        # 選択区間(HP選択のスコア集計対象): [select_start, select_end)。
+        # 最初のレジームチェンジ(t=100)を中心に前後50ステップ=[50,150) とし、
+        # 定常のみで η が過小選択される問題を回避する(切替を含む窓で選ぶ)。
+        self.select_start = int(select_start)
+        self.select_end = int(select_end)
 
         # モデルは 1 つ生成して使い回す (param_dim をここで確定)
         self.model = NeuralNetRegression(self.input_dim, self.hidden_dim,
@@ -259,8 +264,10 @@ class RegressionSwitchBenchmark(Benchmark):
                 test_indices=np.empty(0, int),
                 test_before_train=True,
                 regime_id=int(regime_ids[t]),
-                # 選択区間(ウォームアップ)と報告区間を分離(R1-13)
-                is_selection_step=(t < self.eval_start),
+                # 選択区間 [select_start, select_end)(切替を含む窓)と
+                # 報告区間 t>=eval_start を分離(R1-13)。選択と報告は別シードで
+                # 実行されるためステップ範囲が重なってもリークにはならない。
+                is_selection_step=(self.select_start <= t < self.select_end),
                 is_report_step=(t >= self.eval_start),
                 # 合成タスクでは train/test を θ*_t から独立生成するため
                 # test ブロックは切替点を「またがない」→ straddles_switch=False。

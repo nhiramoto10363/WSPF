@@ -38,11 +38,13 @@ _BENCH_CLASSES = None
 
 def _bench_class(name):
     from src.benchmarks import (
-        RegressionSwitchBenchmark, GefcomBenchmark, EmailBenchmark)
+        RegressionSwitchBenchmark, GefcomBenchmark, EmailBenchmark,
+        InsectsBenchmark)
     return {
         "regression": RegressionSwitchBenchmark,
         "gefcom": GefcomBenchmark,
         "email": EmailBenchmark,
+        "insects": InsectsBenchmark,
     }[name]
 
 
@@ -68,8 +70,13 @@ def build_benchmark(cfg, **overrides):
     data = dict(cfg.get("data", {}))
     ev = cfg.get("eval", {})
     # 選択/報告区間の境界を config(eval セクション)からベンチマークへ渡す
-    if name == "regression" and "eval_start" in ev:
-        data.setdefault("eval_start", ev["eval_start"])
+    if name == "regression":
+        if "eval_start" in ev:
+            data.setdefault("eval_start", ev["eval_start"])
+        if "select_start" in ev:
+            data.setdefault("select_start", ev["select_start"])
+        if "select_end" in ev:
+            data.setdefault("select_end", ev["select_end"])
     if name == "email":
         rs = ev.get("report_start", data.get("report_start"))
         if rs is not None:

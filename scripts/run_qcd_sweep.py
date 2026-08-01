@@ -41,6 +41,11 @@ def main():
     n = cfg["n_particles"]["main"]
     sigmas = args.sigma_cd or cfg["grid"]["sigma_sys"]
 
+    # 主要指標は task_type 依存(回帰=mse, 分類=f1)。列名も指標に合わせるため
+    # email は f1_mean/f1_std、回帰/GEFCom は従来どおり mse_mean/mse_std になる。
+    metric_key = "mse" if cfg["task_type"] == "regression" else "f1"
+    mean_col, std_col = f"{metric_key}_mean", f"{metric_key}_std"
+
     contexts = benchmark_contexts(cfg, selected)   # GEFCom は 3zone+保存noise
     rows = []
     for ctx in contexts:
@@ -56,7 +61,7 @@ def main():
              p90, p99, clip, cliprate, nonf) = ([] for _ in range(12))
             for r in results:
                 mask = region_mask(r, "report")
-                mses.append(np.nanmean(np.asarray(r["metrics"]["mse"])[mask]))
+                mses.append(np.nanmean(np.asarray(r["metrics"][metric_key])[mask]))
                 if r.get("history"):
                     # 診断量も report 区間に限定する(selection混入を防ぐ, F2)
                     hr = masked_history(r["history"], mask)
@@ -90,7 +95,7 @@ def main():
                 count_key, rate_key = ("clip_count", "wspf_b_actual_clip_rate")
             row = {
                 "method": m, "zone": zone, "sigma_cd": sc,
-                "mse_mean": mu, "mse_std": sd,
+                mean_col: mu, std_col: sd,
                 "ess_over_N": _mean(ess), "resample_rate": _mean(resamp),
                 "rho_q50": _mean(q50), "rho_q90": _mean(q90v),
                 "rho_q99": _mean(q99v), "rho_max": _mean(rmax),
@@ -100,7 +105,7 @@ def main():
             }
             rows.append(row)
             ztag = f"[zone {zone}] " if zone is not None else ""
-            print(f"{ztag}{m:7s} σ_cd={sc:<6} MSE={mu:.4f}±{sd:.4f} "
+            print(f"{ztag}{m:7s} σ_cd={sc:<6} {metric_key.upper()}={mu:.4f}±{sd:.4f} "
                   f"ESS/N={row['ess_over_N'] if row['ess_over_N'] is None else round(row['ess_over_N'],2)}")
 
     out_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)),

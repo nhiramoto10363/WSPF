@@ -126,6 +126,25 @@ def prediction_std_with_noise(pred_var, obs_sigma):
     return np.sqrt(np.maximum(pred_var, 0.0) + float(obs_sigma) ** 2)
 
 
+def weighted_prediction_proba(predict_fn, particles, weights, X):
+    """多クラス分類: 粒子ごとのクラス確率を重み平均する。
+
+    predict_fn(particles[N,d], X) は (N, B, C) のクラス確率を返すこと。
+    パラメータ平均ではなく **粒子ごとに推論した確率を重み平均** する
+    (回帰の weighted_prediction と同じ集約規約)。凸結合なので結果も確率。
+
+    Returns
+    -------
+    probs : ndarray, shape (B, C)   重み平均されたクラス確率
+    """
+    preds = np.asarray(predict_fn(particles, X), dtype=np.float64)
+    if preds.ndim == 2:   # 万一 (N,B) の二値確率が来たら 2 クラスへ拡張
+        preds = np.stack([1.0 - preds, preds], axis=-1)
+    w = np.asarray(weights, dtype=np.float64)
+    w = w / max(w.sum(), 1e-300)
+    return np.einsum("n,nbc->bc", w, preds)   # (B, C)
+
+
 # ======================================================================
 # 回帰指標
 # ======================================================================
@@ -277,6 +296,47 @@ def nll_bernoulli(probs, y, eps=1e-10):
 def loglik_bernoulli(probs, y, eps=1e-10):
     """ベルヌーイ平均対数尤度(旧 compute_loglik と一致, 大きいほど良い)。"""
     return -nll_bernoulli(probs, y, eps)
+
+
+# ======================================================================
+# 多クラス分類指標(INSECTS)
+# ======================================================================
+def macro_f1(pred, y, n_classes):
+    """マクロ平均 F1(各クラス F1 の非加重平均, 大きいほど良い)。
+
+    pred, y はハードラベル(整数)。空クラス(tp+fp=0 かつ tp+fn=0)の F1 は 0。
+    """
+    pred = np.asarray(pred).ravel().astype(np.int64)
+    y = np.asarray(y).ravel().astype(np.int64)
+    f1s = []
+    for c in range(int(n_classes)):
+        tp = np.sum((pred == c) & (y == c))
+        fp = np.sum((pred == c) & (y != c))
+        fn = np.sum((pred != c) & (y == c))
+        prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1s.append(0.0 if prec + rec == 0
+                   else 2.0 * prec * rec / (prec + rec))
+    return float(np.mean(f1s))
+
+
+def nll_categorical(probs, y, eps=1e-12):
+    """カテゴリカル(多クラス)平均負対数尤度。probs: (B, C), y: (B,) 整数。"""
+    probs = np.asarray(probs, dtype=np.float64)
+    y = np.asarray(y).ravel().astype(np.int64)
+    B = y.shape[0]
+    p_true = np.clip(probs[np.arange(B), y], eps, 1.0)
+    return float(-np.mean(np.log(p_true)))
+
+
+def brier_multiclass(probs, y, n_classes):
+    """多クラス Brier スコア: mean_i Σ_c (p_ic − onehot_ic)²。probs: (B, C)。"""
+    probs = np.asarray(probs, dtype=np.float64)
+    y = np.asarray(y).ravel().astype(np.int64)
+    B = y.shape[0]
+    onehot = np.zeros((B, int(n_classes)), dtype=np.float64)
+    onehot[np.arange(B), y] = 1.0
+    return float(np.mean(np.sum((probs - onehot) ** 2, axis=1)))
 
 
 def brier_ece(probs, labels, n_bins=10):
