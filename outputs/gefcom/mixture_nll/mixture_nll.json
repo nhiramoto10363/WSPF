@@ -1,0 +1,93 @@
+{
+  "benchmark": "gefcom",
+  "n_particles": 100,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "provisional": false,
+  "rows": [
+    {
+      "method": "PF",
+      "zone": 1,
+      "mixture_nll_report_mean": -0.03719283637229129,
+      "mixture_nll_report_std": 0.004135527049200348,
+      "mixture_nll_selection_mean": -0.06474509531412011,
+      "mixture_nll_selection_std": 0.0028774700056384576,
+      "n_seeds": 3
+    },
+    {
+      "method": "WSPF-A",
+      "zone": 1,
+      "mixture_nll_report_mean": -0.012098255666933067,
+      "mixture_nll_report_std": 0.010014960123288834,
+      "mixture_nll_selection_mean": -0.053648525424703115,
+      "mixture_nll_selection_std": 0.0032444054749365624,
+      "n_seeds": 3
+    },
+    {
+      "method": "WSPF-B",
+      "zone": 1,
+      "mixture_nll_report_mean": -0.0456535241346632,
+      "mixture_nll_report_std": 0.014084704469292941,
+      "mixture_nll_selection_mean": -0.07224237476732688,
+      "mixture_nll_selection_std": 0.005083921501936995,
+      "n_seeds": 3
+    },
+    {
+      "method": "PF",
+      "zone": 2,
+      "mixture_nll_report_mean": -0.07078138431236577,
+      "mixture_nll_report_std": 0.0073810996285373,
+      "mixture_nll_selection_mean": -0.10964038266623445,
+      "mixture_nll_selection_std": 0.0028622460391508594,
+      "n_seeds": 3
+    },
+    {
+      "method": "WSPF-A",
+      "zone": 2,
+      "mixture_nll_report_mean": -0.021221909745255882,
+      "mixture_nll_report_std": 0.011491332942887006,
+      "mixture_nll_selection_mean": -0.0948451518279601,
+      "mixture_nll_selection_std": 0.010603069539932636,
+      "n_seeds": 3
+    },
+    {
+      "method": "WSPF-B",
+      "zone": 2,
+      "mixture_nll_report_mean": -0.06963726099990229,
+      "mixture_nll_report_std": 0.006748531954173999,
+      "mixture_nll_selection_mean": -0.11485252439757554,
+      "mixture_nll_selection_std": 0.005898063880578489,
+      "n_seeds": 3
+    },
+    {
+      "method": "PF",
+      "zone": 3,
+      "mixture_nll_report_mean": -0.024326200932977927,
+      "mixture_nll_report_std": 0.0037894190328712795,
+      "mixture_nll_selection_mean": -0.04649776983176693,
+      "mixture_nll_selection_std": 0.0021298440724567924,
+      "n_seeds": 3
+    },
+    {
+      "method": "WSPF-A",
+      "zone": 3,
+      "mixture_nll_report_mean": 0.031485706957048755,
+      "mixture_nll_report_std": 0.009045440014117648,
+      "mixture_nll_selection_mean": -0.02682581389011726,
+      "mixture_nll_selection_std": 0.002533502169371008,
+      "n_seeds": 3
+    },
+    {
+      "method": "WSPF-B",
+      "zone": 3,
+      "mixture_nll_report_mean": -0.03436944973660667,
+      "mixture_nll_report_std": 0.0005388415959922487,
+      "mixture_nll_selection_mean": -0.05217244355688106,
+      "mixture_nll_selection_std": 0.00463118808120177,
+      "n_seeds": 3
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+method,zone,mixture_nll_report_mean,mixture_nll_report_std,mixture_nll_selection_mean,mixture_nll_selection_std,n_seeds
+PF,None,0.0973853,0,0.134029,0,1
+WSPF-B,None,0.140127,0,0.0885714,0,1

@@ -1,0 +1,28 @@
+{
+  "benchmark": "gefcom_price",
+  "n_particles": 100,
+  "seeds": [
+    0
+  ],
+  "provisional": true,
+  "rows": [
+    {
+      "method": "PF",
+      "zone": null,
+      "mixture_nll_report_mean": 0.09738528825034318,
+      "mixture_nll_report_std": 0.0,
+      "mixture_nll_selection_mean": 0.1340291786180442,
+      "mixture_nll_selection_std": 0.0,
+      "n_seeds": 1
+    },
+    {
+      "method": "WSPF-B",
+      "zone": null,
+      "mixture_nll_report_mean": 0.1401271545434691,
+      "mixture_nll_report_std": 0.0,
+      "mixture_nll_selection_mean": 0.0885714491988944,
+      "mixture_nll_selection_std": 0.0,
+      "n_seeds": 1
+    }
+  ]
+}
