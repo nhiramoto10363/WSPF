@@ -45,6 +45,9 @@ from .base import (
     propagate_phi,
     phi_to_sigma,
     weighted_sigma_mean,
+    make_stratified_learning_rates,
+    stratified_eta_diagnostics,
+    fast_to_slow_rate,
 )
 from .wspf_b import compute_gradient_noise_variance, RHO_CLIP
 
@@ -93,18 +96,21 @@ def compute_correction_method_a(epsilon, xi_hat, deviations, eta,
     """
     N, B, dd = deviations.shape
     c = sigma_sys_sq
-    alpha = eta ** 2 / (B * (B - 1))
+    # 層化学習率 (§8.4): eta を (N,) に展開。スカラー入力は全粒子同値に
+    # broadcast され、従来 (スカラー eta) と数値的に一致する。
+    eta = np.broadcast_to(np.asarray(eta, dtype=np.float64), (N,))
+    alpha = eta ** 2 / (B * (B - 1))                      # (N,)
 
-    v = epsilon - eta * xi_hat  # (N, d)  = ε − Δμ̂
+    v = epsilon - eta[:, None] * xi_hat  # (N, d)  = ε − Δμ̂ (Δμ̂ = η_i ξ̂)
 
     # G = α W W^T  (N, B, B),  M = I_B + c⁻¹ G  (SPD, 固有値 ≥ 1)
-    G = alpha * np.einsum("nbd,ncd->nbc", deviations, deviations)
+    G = alpha[:, None, None] * np.einsum("nbd,ncd->nbc", deviations, deviations)
     M = G / c
     diag = np.arange(B)
     M[:, diag, diag] += 1.0
 
     # p = √α W v  (N, B)
-    p = np.sqrt(alpha) * np.einsum("nbd,nd->nb", deviations, v)
+    p = np.sqrt(alpha)[:, None] * np.einsum("nbd,nd->nb", deviations, v)
 
     # Cholesky（失敗時のみ、失敗した粒子だけに jitter を追加）
     # 高速な batched パスをまず試し、失敗時のみ粒子ごとのループに落として
@@ -144,7 +150,7 @@ def compute_correction_method_a(epsilon, xi_hat, deviations, eta,
     #         = −½ log|M| + ½ quad_q − ½ quad_p     (d log c は相殺)
     log_correction_raw = -0.5 * logdet_M + 0.5 * quad_q - 0.5 * quad_p
 
-    # スカラー相当 ρ 診断: s̄ = tr(Σ̂)/d
+    # スカラー相当 ρ 診断: s̄ = tr(Σ̂)/d。各粒子自身の η_i を使う。
     s_bar = np.sum(deviations ** 2, axis=(1, 2)) / (B * (B - 1) * d)
     rho = eta ** 2 * s_bar / (eta ** 2 * s_bar + c)
 
@@ -198,6 +204,8 @@ class WSPF_A:
         phi_init_mean=0.0,
         phi_init_std=0.5,
         phi_seed=None,
+        eta_scheme="fixed",
+        eta_seed=None,
     ):
         """
         Parameters
@@ -207,7 +215,7 @@ class WSPF_A:
         param_dim : int
             パラメータ次元数 d
         eta : float
-            学習率
+            学習率。層化版 (eta_scheme="stratified_exp") では分布の平均 η̄ の意味
         sigma_sys : float
             システムノイズの標準偏差 σ_cd
         prior_mean : float
@@ -233,10 +241,25 @@ class WSPF_A:
             φ_0 の初期標準偏差
         phi_seed : int, optional
             φ 専用 rng のシード (θ 系の乱数列と分離)
+        eta_scheme : {"fixed", "stratified_exp"}
+            "fixed": 全粒子共通のスカラー eta (従来と完全一致)。
+            "stratified_exp": 指数分布の層化学習率をスロット別に配置 (§3)。
+        eta_seed : int, optional
+            η 層化専用 rng のシード (θ 系の乱数列と分離, §8.1)
         """
         self.N = n_particles
         self.param_dim = param_dim
-        self.eta = eta
+        # --- 層化学習率 (§8.2): eta は平均 η̄。fixed では全スロット η̄ ---
+        self.eta_mean = float(eta)
+        self.eta_scheme = eta_scheme
+        if eta_scheme == "fixed":
+            self.eta_slots = np.full(self.N, self.eta_mean)
+        elif eta_scheme == "stratified_exp":
+            self.eta_slots = make_stratified_learning_rates(
+                self.N, self.eta_mean, eta_seed)
+        else:
+            raise ValueError(f"unknown eta_scheme: {eta_scheme!r}")
+        self.eta = self.eta_mean   # 後方互換のスカラー別名
         self.sigma_sys = sigma_sys
         self.sigma_sys_sq = sigma_sys ** 2
         self.ess_resample_ratio = ess_resample_ratio
@@ -298,6 +321,13 @@ class WSPF_A:
             # --- φ_t 拡張診断 (adaptive_obs 時のみ追記) ---
             "sigma_hat_mean": [],    # 重み付き平均 σ̂_t = Σ w_i exp(φ_i/2)
             "phi_std": [],           # 粒子間 φ の std (φ 縮退の監視)
+            # --- 層化学習率診断 (§9; stratified_exp 時のみ意味を持つ) ---
+            "eta_weighted_mean": [],
+            "eta_weighted_std": [],
+            "eta_slow_mass": [],
+            "eta_fast_mass": [],
+            "eta_map": [],
+            "eta_fast_to_slow_rate": [],
         }
         # 勾配評価の種別と累積カウント (R1-11)
         self.grad_eval_kind = "per_sample"  # WSPF-A は per-sample 勾配が必要
@@ -365,18 +395,17 @@ class WSPF_A:
         epsilon = self.rng.normal(
             0.0, self.sigma_sys, size=self.particles.shape
         )
-        self.particles = self.particles - self.eta * g_hat + epsilon
+        self.particles = self.particles - self.eta_slots[:, None] * g_hat + epsilon
 
         # 4b) φ 遷移 (adaptive_obs 時のみ; φ 専用 rng → θ 側の乱数列は不変)
         if self.adaptive_obs:
             self.phi = propagate_phi(self.phi, self.tau_phi, self.phi_rng)
 
-        # 5) 補正項 (Method A, 行列版; ここに Woodbury/Cholesky/logdet が入る)
-        #    φ は観測非依存の事前遷移から提案されるため prior–proposal 比の
-        #    φ ブロックは恒等的に 1。log R̂ は θ ブロックのみ (設計書 §0.3)。
+        # 5) 補正項 (Method A, 行列版) — 各粒子自身の η_i を使う (§8.4)。
+        #    Woodbury/Cholesky は eta の broadcast で粒子別化 (計算量は実質不変)。
         (log_correction, rho, logcorr_nonfinite_count,
          cond_M, jitter_count) = compute_correction_method_a(
-            epsilon, xi_hat, deviations, self.eta,
+            epsilon, xi_hat, deviations, self.eta_slots,
             self.sigma_sys_sq, self.param_dim,
         )
         _t_corr = time.perf_counter()
@@ -409,15 +438,22 @@ class WSPF_A:
         rho_clip_count = int(np.sum(rho >= RHO_CLIP))
         sigma_hat_mean = (weighted_sigma_mean(self.weights, self.phi)
                           if self.adaptive_obs else None)
+        # 層化学習率診断 (§9): リサンプリング前の重みで評価
+        eta_wmean, eta_wstd, eta_slow, eta_fast, eta_map = \
+            stratified_eta_diagnostics(self.weights, self.eta_slots,
+                                       self.eta_mean)
         _t_wt = time.perf_counter()
 
         # 9) EMA 更新（現在のバッチ勾配で更新）
         self.ema_m = self.beta * self.ema_m + (1.0 - self.beta) * g_hat
 
         # 10) ESS が低い場合はリサンプリング → 重みリセット + EMA 複製
+        #     η_i はスロット固定 (§5): 祖先から複製しない。θ・EMA・φ は複製。
+        eta_f2s = 0.0
         if ess < self.ess_resample_ratio * self.N:
             idx = systematic_resample(self.weights, self.rng)
             n_unique = int(np.unique(idx).size)
+            eta_f2s = fast_to_slow_rate(idx, self.eta_slots, self.eta_mean)
             self.particles = self.particles[idx]
             self.ema_m = self.ema_m[idx]  # EMA 状態もリサンプリング
             if self.adaptive_obs:
@@ -433,6 +469,14 @@ class WSPF_A:
         if self.adaptive_obs:
             self.history["sigma_hat_mean"].append(sigma_hat_mean)
             self.history["phi_std"].append(float(np.std(self.phi)))
+
+        # 層化学習率診断 (§9)
+        self.history["eta_weighted_mean"].append(eta_wmean)
+        self.history["eta_weighted_std"].append(eta_wstd)
+        self.history["eta_slow_mass"].append(eta_slow)
+        self.history["eta_fast_mass"].append(eta_fast)
+        self.history["eta_map"].append(eta_map)
+        self.history["eta_fast_to_slow_rate"].append(eta_f2s)
 
         # 履歴に保存
         self.history["mean"].append(mean.copy())

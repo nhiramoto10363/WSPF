@@ -202,6 +202,69 @@ def weighted_sigma_mean(weights, phi):
     return float(np.sum(weights * phi_to_sigma(phi)))
 
 
+# ================================================================
+# 層化学習率 (Stratified Learning-Rate WSPF, 設計書 §3/§8.1)
+# ================================================================
+def make_stratified_learning_rates(n_particles, eta_mean, seed=None):
+    """粒子スロット別の層化学習率 η_1..η_N を生成する (§8.1)。
+
+    指数分布 (Gamma α=1) の逆CDFを中点配置し、平均を厳密に eta_mean へ
+    正規化した後、固定ランダム置換でスロットへ割り当てる。置換は祖先-学習率
+    相関 (systematic resample の単調祖先) を除去するため (§3.2)。
+
+    eta_rng は粒子初期化・システムノイズ用の rng から **分離** する。
+    これにより固定学習率版と同一シードで θ 側の乱数列が一致し、対照実験が
+    成立する (§8.1)。
+
+    Parameters
+    ----------
+    n_particles : int
+    eta_mean : float          学習率分布の平均 η̄ (探索対象はこれのみ)
+    seed : int, optional      η 専用 rng のシード (θ 系と分離)
+
+    Returns
+    -------
+    eta_slots : ndarray (N,)   Σ η_i / N == eta_mean が厳密に成立
+    """
+    n = int(n_particles)
+    u = (np.arange(n) + 0.5) / n
+    multipliers = -np.log1p(-u)          # 指数分布の逆CDF (中点)
+    multipliers = multipliers / multipliers.mean()   # 平均を厳密に 1
+    eta_rng = np.random.default_rng(seed)
+    perm = eta_rng.permutation(n)        # 祖先-学習率相関の除去
+    return float(eta_mean) * multipliers[perm]
+
+
+def stratified_eta_diagnostics(weights, eta_slots, eta_mean):
+    """重み付き学習率診断 (§9): (wmean, wstd, slow_mass, fast_mass, map_eta)。
+
+    重み更新後・リサンプリング前の重みで評価する。slow/fast は eta_mean の
+    0.5 倍未満 / 1.5 倍超で定義する。
+    """
+    w = np.asarray(weights, dtype=np.float64)
+    eta = np.asarray(eta_slots, dtype=np.float64)
+    wmean = float(np.sum(w * eta))
+    wvar = float(np.sum(w * (eta - wmean) ** 2))
+    wstd = float(np.sqrt(max(wvar, 0.0)))
+    slow_mass = float(np.sum(w[eta < 0.5 * eta_mean]))
+    fast_mass = float(np.sum(w[eta > 1.5 * eta_mean]))
+    map_eta = float(eta[int(np.argmax(w))])
+    return wmean, wstd, slow_mass, fast_mass, map_eta
+
+
+def fast_to_slow_rate(ancestor_idx, eta_slots, eta_mean):
+    """fast→slow 移行率 (§9): 祖先が高速スロット・新スロットが低速の割合。
+
+    R = (1/N) Σ_i 1[ η(a_i) > 1.5 η̄  かつ  η_i < 0.5 η̄ ]。
+    リサンプリングが発動したステップでのみ意味を持つ (それ以外は a_i=i)。
+    """
+    eta = np.asarray(eta_slots, dtype=np.float64)
+    anc = eta[np.asarray(ancestor_idx, dtype=np.int64)]
+    fast = anc > 1.5 * eta_mean
+    slow = eta < 0.5 * eta_mean
+    return float(np.mean(fast & slow))
+
+
 def ensemble_spread_trace(particles):
     """
     パラメータ空間での粒子群の広がり = 標本共分散のトレース

@@ -93,6 +93,8 @@ SEED_OFFSET = {
 
 # φ 専用 rng のシードは fseed + PHI_SEED_OFFSET (θ 系 rng と分離, 設計書 §5.2)
 PHI_SEED_OFFSET = 200
+# 層化学習率 η 専用 rng のシードは fseed + ETA_SEED_OFFSET (θ/φ 系と分離, §8.1)
+ETA_SEED_OFFSET = 400
 
 
 # ======================================================================
@@ -127,6 +129,12 @@ def _build_estimator(method, benchmark, n_particles, params, seed, funcs,
             phi_seed=fseed + PHI_SEED_OFFSET,
         )
 
+    # 層化学習率 (WSPF-A/B のみ, §8.2)。eta_scheme は params 優先、無ければ
+    # benchmark 属性、既定 "fixed"(従来と完全一致)。η 専用 rng は θ/φ と分離。
+    eta_scheme = params.get("eta_scheme",
+                            getattr(benchmark, "eta_scheme", "fixed"))
+    eta_kwargs = dict(eta_scheme=eta_scheme, eta_seed=fseed + ETA_SEED_OFFSET)
+
     if method in ("PF", "PF-N"):
         return ParticleFilter(
             n_particles, d, eta=eta, sigma_sys=sigma_sys,
@@ -139,7 +147,7 @@ def _build_estimator(method, benchmark, n_particles, params, seed, funcs,
             n_particles, d, eta=eta, sigma_sys=sigma_sys,
             prior_mean=prior_mean, prior_std=prior_std,
             ess_resample_ratio=ess_ratio, grad_clip_norm=grad_clip, seed=fseed,
-            **adaptive_kwargs,
+            **adaptive_kwargs, **eta_kwargs,
         )
     if method in ("WSPF-A", "WSPF-A-N"):
         return WSPF_A(
@@ -147,7 +155,7 @@ def _build_estimator(method, benchmark, n_particles, params, seed, funcs,
             prior_mean=prior_mean, prior_std=prior_std,
             ess_resample_ratio=ess_ratio, grad_clip_norm=grad_clip,
             beta=params.get("beta", 0.9), seed=fseed,
-            **adaptive_kwargs,
+            **adaptive_kwargs, **eta_kwargs,
         )
     if method == "Oracle":
         return OraclePF(
@@ -310,6 +318,15 @@ def run_method(method, benchmark, n_particles, params, seed,
             # std で評価する (設計書 §5.1)。それ以外は従来経路。
             sigma_particles = getattr(estimator, "obs_sigma_particles", None) \
                 if is_reg else None
+            # 層化学習率 WSPF (設計書 §10): 予測分布が多峰なので混合ガウスで
+            # 評価する。σ は共通 (obs_sigma) の (N,) ベクトルとして φ 経路を流用。
+            # 固定 σ かつ共通なので CRPS/coverage 用 std は従来と一致し、NLL のみ
+            # 混合になる。eta_scheme="fixed" では発動せず従来と完全一致。
+            if (is_reg and sigma_particles is None
+                    and getattr(estimator, "eta_scheme", "fixed") != "fixed"):
+                n_part = int(getattr(estimator, "N", 0))
+                if n_part:
+                    sigma_particles = np.full(n_part, obs_sigma, dtype=np.float64)
             if sigma_particles is not None:
                 preds_mat = M.particle_prediction_matrix(
                     predict_fn, particles, Xte)

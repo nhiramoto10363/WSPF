@@ -39,6 +39,9 @@ from .base import (
     propagate_phi,
     phi_to_sigma,
     weighted_sigma_mean,
+    make_stratified_learning_rates,
+    stratified_eta_diagnostics,
+    fast_to_slow_rate,
 )
 
 # ρ を安全域に留めるためのクリップ上限（論文 Alg.2 参照）。
@@ -101,8 +104,9 @@ def compute_correction_method_b(epsilon, eta, s_bar, sigma_sys_sq, d):
     ----------
     epsilon : ndarray, shape (N, d)
         concept drift ノイズの実現値
-    eta : float
-        学習率
+    eta : float or ndarray (N,)
+        学習率。スカラー (固定学習率版) でも粒子別 (層化学習率版, §8.3) でも可。
+        層化版では ρ_i = η_i²ŝ_i / (η_i²ŝ_i + σ²_cd) と各粒子自身の η_i を使う。
     s_bar : ndarray, shape (N,)
         各粒子のスカラー勾配ノイズ分散 (バッチ勾配の分散)
     sigma_sys_sq : float
@@ -117,6 +121,8 @@ def compute_correction_method_b(epsilon, eta, s_bar, sigma_sys_sq, d):
     rho : ndarray, shape (N,)
         signal-to-drift ratio ρ^(i)
     """
+    # スカラー入力は (N,) s_bar との broadcast で従来と数値一致する。
+    eta = np.asarray(eta, dtype=np.float64)
     eta_sq = eta ** 2
     s_bar_safe = np.maximum(s_bar, 1e-30)
     rho_raw = eta_sq * s_bar_safe / (eta_sq * s_bar_safe + sigma_sys_sq)
@@ -181,6 +187,8 @@ class WSPF_B:
         phi_init_mean=0.0,
         phi_init_std=0.5,
         phi_seed=None,
+        eta_scheme="fixed",
+        eta_seed=None,
     ):
         """
         Parameters
@@ -190,7 +198,7 @@ class WSPF_B:
         param_dim : int
             パラメータ次元数 d
         eta : float
-            学習率
+            学習率。層化版 (eta_scheme="stratified_exp") では分布の平均 η̄ の意味
         sigma_sys : float
             システムノイズの標準偏差 σ_cd
         prior_mean : float
@@ -214,10 +222,25 @@ class WSPF_B:
             φ_0 の初期標準偏差
         phi_seed : int, optional
             φ 専用 rng のシード (θ 系の乱数列と分離)
+        eta_scheme : {"fixed", "stratified_exp"}
+            "fixed": 全粒子共通のスカラー eta (従来と完全一致)。
+            "stratified_exp": 指数分布の層化学習率をスロット別に配置 (§3)。
+        eta_seed : int, optional
+            η 層化専用 rng のシード (θ 系の乱数列と分離, §8.1)
         """
         self.N = n_particles
         self.param_dim = param_dim
-        self.eta = eta
+        # --- 層化学習率 (§8.2): eta は平均 η̄。fixed では全スロット η̄ ---
+        self.eta_mean = float(eta)
+        self.eta_scheme = eta_scheme
+        if eta_scheme == "fixed":
+            self.eta_slots = np.full(self.N, self.eta_mean)
+        elif eta_scheme == "stratified_exp":
+            self.eta_slots = make_stratified_learning_rates(
+                self.N, self.eta_mean, eta_seed)
+        else:
+            raise ValueError(f"unknown eta_scheme: {eta_scheme!r}")
+        self.eta = self.eta_mean   # 後方互換のスカラー別名 (診断/外部参照用)
         self.sigma_sys = sigma_sys
         self.sigma_sys_sq = sigma_sys ** 2
         self.ess_resample_ratio = ess_resample_ratio
@@ -270,6 +293,13 @@ class WSPF_B:
             # --- φ_t 拡張診断 (adaptive_obs 時のみ追記) ---
             "sigma_hat_mean": [],    # 重み付き平均 σ̂_t = Σ w_i exp(φ_i/2)
             "phi_std": [],           # 粒子間 φ の std (φ 縮退の監視)
+            # --- 層化学習率診断 (§9; stratified_exp 時のみ意味を持つ) ---
+            "eta_weighted_mean": [],  # Σ w_i η_i (定常低下/switch直後急上昇)
+            "eta_weighted_std": [],   # 重み付き η の std (switch直後拡大)
+            "eta_slow_mass": [],      # Σ_{η_i<0.5η̄} w_i
+            "eta_fast_mass": [],      # Σ_{η_i>1.5η̄} w_i
+            "eta_map": [],            # MAP粒子 (argmax w) の η
+            "eta_fast_to_slow_rate": [],  # リサンプリング時の fast→slow 移行率
         }
         # 勾配評価の種別と累積カウント (R1-11)
         self.grad_eval_kind = "per_sample"  # WSPF-B は per-sample 勾配が必要
@@ -322,21 +352,20 @@ class WSPF_B:
             scale = np.minimum(1.0, self.grad_clip_norm / (norms + 1e-12))
             g_hat = g_hat * scale
 
-        # 2) SGD 更新 + concept drift ノイズ
+        # 2) SGD 更新 + concept drift ノイズ (層化: 粒子別 η_i)
         epsilon = self.rng.normal(
             0.0, self.sigma_sys, size=self.particles.shape
         )
-        self.particles = self.particles - self.eta * g_hat + epsilon
+        self.particles = self.particles - self.eta_slots[:, None] * g_hat + epsilon
 
         # 2b) φ 遷移 (adaptive_obs 時のみ; φ 専用 rng → θ 側の乱数列は不変)
         if self.adaptive_obs:
             self.phi = propagate_phi(self.phi, self.tau_phi, self.phi_rng)
 
-        # 3) 補正項 (Method B) — φ は観測非依存の事前遷移から提案されるため
-        #    prior–proposal 比の φ ブロックは恒等的に 1。log R̂ は θ ブロック
-        #    のみで従来通り計算する (設計書 §0.3)。
+        # 3) 補正項 (Method B) — 各粒子自身の η_i を使う (§8.3)。φ は観測非依存の
+        #    事前遷移から提案されるため prior–proposal 比の φ ブロックは恒等的に 1。
         log_correction, rho, logcorr_nonfinite_count = compute_correction_method_b(
-            epsilon, self.eta, s_bar, self.sigma_sys_sq, self.param_dim
+            epsilon, self.eta_slots, s_bar, self.sigma_sys_sq, self.param_dim
         )
         _t_corr = time.perf_counter()
 
@@ -369,12 +398,19 @@ class WSPF_B:
         rho_clip_count = int(np.sum(rho >= RHO_CLIP))
         sigma_hat_mean = (weighted_sigma_mean(self.weights, self.phi)
                           if self.adaptive_obs else None)
+        # 層化学習率診断 (§9): リサンプリング前の重みで評価
+        eta_wmean, eta_wstd, eta_slow, eta_fast, eta_map = \
+            stratified_eta_diagnostics(self.weights, self.eta_slots,
+                                       self.eta_mean)
         _t_wt = time.perf_counter()
 
         # 7) ESS が低い場合はリサンプリング → 重みリセット
+        #    η_i はスロット固定 (§5): 祖先から複製しない。θ・φ は複製する。
+        eta_f2s = 0.0
         if ess < self.ess_resample_ratio * self.N:
             idx = systematic_resample(self.weights, self.rng)
             n_unique = int(np.unique(idx).size)
+            eta_f2s = fast_to_slow_rate(idx, self.eta_slots, self.eta_mean)
             self.particles = self.particles[idx]
             if self.adaptive_obs:
                 self.phi = self.phi[idx]   # φ も同一祖先で引き継ぐ
@@ -389,6 +425,14 @@ class WSPF_B:
         if self.adaptive_obs:
             self.history["sigma_hat_mean"].append(sigma_hat_mean)
             self.history["phi_std"].append(float(np.std(self.phi)))
+
+        # 層化学習率診断 (§9)
+        self.history["eta_weighted_mean"].append(eta_wmean)
+        self.history["eta_weighted_std"].append(eta_wstd)
+        self.history["eta_slow_mass"].append(eta_slow)
+        self.history["eta_fast_mass"].append(eta_fast)
+        self.history["eta_map"].append(eta_map)
+        self.history["eta_fast_to_slow_rate"].append(eta_f2s)
 
         # 履歴に保存
         self.history["mean"].append(mean.copy())
