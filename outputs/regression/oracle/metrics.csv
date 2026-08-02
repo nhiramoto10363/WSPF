@@ -1,0 +1,9 @@
+method,metric,mean,std,mean_difference,std_difference,paired_t_p
+PF,mse,0.326865,0.0347915,,,
+Oracle,mse,0.311585,0.0344128,,,
+WSPF-A,mse,0.321497,0.0369511,,,
+WSPF-B,mse,0.325645,0.0356142,,,
+Oracle_vs_PF,mse_paired,,,-0.0152805,0.00216378,3.42584e-09
+WSPF-A_vs_PF,mse_paired,,,-0.00536826,0.00263064,0.000117707
+WSPF-B_vs_PF,mse_paired,,,-0.00121992,0.00296077,0.22494
+WSPF-A_minus_Oracle,gap,0.00991224,None,,,

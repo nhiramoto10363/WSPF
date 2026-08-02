@@ -1,0 +1,7 @@
+method      N    eta   sigma_sys  prior_std  beta  ph_delta  ph_lambda  ph_alpha  window  n_passes
+PF          100  0.2   0.005      0.25                                                            
+WSPF-A      100  0.2   0.001      0.25       0.9                                                  
+WSPF-B      100  0.2   0.001      0.25                                                            
+SGD         -    0.2              0.25                                                            
+PH-SGD      -    0.2              0.25             0.01      2          0.9999                    
+Window-SGD  -    0.05             0.1                                             5       2       

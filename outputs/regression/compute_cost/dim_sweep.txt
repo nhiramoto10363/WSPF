@@ -1,0 +1,9 @@
+benchmark   method  hidden_dim  param_dim  t_step_ms  t_correction_ms  peak_mem_MB
+regression  WSPF-A  8           25         4.33347    2.61359          3.45366    
+regression  WSPF-B  8           25         2.228      0.4947           3.42681    
+regression  WSPF-A  16          49         5.82158    3.16727          6.08432    
+regression  WSPF-B  16          49         3.32113    0.66789          6.03494    
+regression  WSPF-A  32          97         8.30196    4.25592          11.3409    
+regression  WSPF-B  32          97         5.17195    1.00846          11.2522    
+regression  WSPF-A  64          193        15.2216    6.93699          21.8554    
+regression  WSPF-B  64          193        10.1631    1.7927           21.6945    

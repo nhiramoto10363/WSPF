@@ -1,0 +1,7 @@
+method,N,eta,sigma_sys,prior_std,beta,ph_delta,ph_lambda,ph_alpha,window,n_passes
+PF,100,0.05,0.05,0.1,,,,,,
+WSPF-A,100,0.05,0.05,0.75,0.95,,,,,
+WSPF-B,100,0.01,0.1,1,,,,,,
+SGD,-,0.05,,0.5,,,,,,
+PH-SGD,-,0.05,,0.5,,0.005,2,0.9999,,
+Window-SGD,-,0.1,,0.2,,,,,3,2
