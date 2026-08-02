@@ -24,7 +24,10 @@
 # オプション環境変数:
 #   RUN_R0=1        R1 の前に R0 (constant 回帰チェック, regression_phi_const)
 #                   を実行する (適応がコストにならないことの sanity check)。
-#   THIN_METHODS=1  WSPF-A / WSPF-A-N を除外して先行確認する (候補 26,775→9,135)。
+#   THIN_GRID=1     軸を積極間引きした config (regression_phi_thin, 全7手法,
+#                   候補 26,775→約450) を使う。先行確認に推奨。
+#   THIN_METHODS=1  WSPF-A / WSPF-A-N を除外する (THIN_GRID と合成可)。
+#                   単独なら候補 26,775→9,135、THIN_GRID と併用で約450→234。
 #   NCPUS / WSPF_NUM_WORKERS  グリッド並列数。
 
 set -euo pipefail
@@ -47,21 +50,31 @@ if [ -n "${NCPUS:-}" ] && [ -z "${WSPF_NUM_WORKERS:-}" ]; then
 fi
 PY="python3 -u"
 
-# THIN_METHODS=1 のとき、A 系を除いた config を一時生成して先行確認する。
+# ベース config の選択:
+#   THIN_GRID=1   → configs/regression_phi_thin.yaml (軸を積極間引き, 全7手法,
+#                   総候補 26,775→約450。commit 済みの先行確認用 config)。
+#   既定          → configs/regression_phi.yaml (フルグリッド)。
 BENCH=regression_phi
-if [ "${THIN_METHODS:-0}" = "1" ]; then
-    echo "[THIN_METHODS] WSPF-A / WSPF-A-N を除外した先行確認 config を生成"
-    $PY - <<'PYEOF'
-import yaml, os
-cfg = yaml.safe_load(open("configs/regression_phi.yaml"))
-cfg["methods"] = [m for m in cfg["methods"] if m not in ("WSPF-A", "WSPF-A-N")]
-cfg["output_dir"] = "outputs/regression_phi_thin"
-os.makedirs("configs", exist_ok=True)
-with open("configs/regression_phi_thin.yaml", "w") as f:
-    yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False)
-print("生成: configs/regression_phi_thin.yaml  methods=", cfg["methods"])
-PYEOF
+if [ "${THIN_GRID:-0}" = "1" ]; then
+    echo "[THIN_GRID] 軸間引き config (regression_phi_thin, 約450候補) を使用"
     BENCH=regression_phi_thin
+fi
+
+# THIN_METHODS=1 のとき、選択中の BENCH から A 系を除いた config を一時生成する。
+# (THIN_GRID と合成可。名前衝突を避けるため *_nomethodA を使う)
+if [ "${THIN_METHODS:-0}" = "1" ]; then
+    echo "[THIN_METHODS] WSPF-A / WSPF-A-N を除外した config を $BENCH から生成"
+    BASE_CFG="$BENCH" $PY - <<'PYEOF'
+import yaml, os
+base = os.environ["BASE_CFG"]
+cfg = yaml.safe_load(open(f"configs/{base}.yaml"))
+cfg["methods"] = [m for m in cfg["methods"] if m not in ("WSPF-A", "WSPF-A-N")]
+cfg["output_dir"] = "outputs/regression_phi_nomethodA"
+with open("configs/regression_phi_nomethodA.yaml", "w") as f:
+    yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False)
+print("生成: configs/regression_phi_nomethodA.yaml  methods=", cfg["methods"])
+PYEOF
+    BENCH=regression_phi_nomethodA
 fi
 
 run_menu () {
