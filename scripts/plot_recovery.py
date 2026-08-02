@@ -90,6 +90,9 @@ def main():
     ap.add_argument("--no-logy", dest="logy", action="store_false")
     ap.add_argument("--band", choices=["sem", "sd"], default="sem",
                     help="帯: sem=±1標準誤差(既定,旧図と同じtight) / sd=±1標準偏差")
+    ap.add_argument("--overlay", default=None,
+                    help="別ベンチの手法を破線・同色で重畳。書式 'bench:m1,m2' "
+                         "(例 regression_strat:WSPF-A,WSPF-B)。ラベルは (strat) 付き")
     ap.add_argument("--outfile", default=None)
     args = ap.parse_args()
 
@@ -146,6 +149,35 @@ def main():
         plotted += 1
         print(f"  {disp}: τ0={curve[0]:.3f}  τ{args.max_lag-1}={curve[-1]:.3f}"
               f"  (n_seed={n_seed})")
+
+    # --- 重畳 (別ベンチの手法を破線・同色で; fixed vs stratified 比較用) ---
+    if args.overlay:
+        ov_bench, ov_methods = args.overlay.split(":")
+        ov_set = set(m.strip() for m in ov_methods.split(","))
+        disp_to_prefix = {d: p for p, d in METHOD_ORDER}
+        for disp in [d for _, d in METHOD_ORDER if d in ov_set]:
+            prefix = disp_to_prefix[disp]
+            runs = _runs_for(ov_bench, prefix)
+            if not runs:
+                print(f"  [skip overlay] {disp}: {ov_bench} に run なし")
+                continue
+            mse_ts, switches = [], None
+            for d in runs:
+                ts, sw = _series_and_switches(d, metric_key, invert)
+                mse_ts.append(ts)
+                switches = sw
+            rec = recovery_curve(mse_ts, switches, max_lag=args.max_lag)
+            curve, sd = rec["curve"], rec["std"]
+            band = sd / np.sqrt(max(len(mse_ts), 1)) if args.band == "sem" else sd
+            c = COLORS.get(disp, None)
+            ax.plot(tau, curve, "--s", color=c, label=f"{disp} (strat)",
+                    lw=2, ms=4, zorder=4, markerfacecolor="white")
+            ax.fill_between(tau, curve - band, curve + band, color=c,
+                            alpha=0.10, lw=0, zorder=1)
+            curve_lo = min(curve_lo, float(np.nanmin(curve)))
+            curve_hi = max(curve_hi, float(np.nanmax(curve)))
+            print(f"  {disp} (strat): τ0={curve[0]:.3f} "
+                  f"τ{args.max_lag-1}={curve[-1]:.3f} (n_seed={len(mse_ts)})")
 
     if plotted == 0:
         raise SystemExit("プロット対象の run がありません。")
