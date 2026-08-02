@@ -43,15 +43,17 @@ METHOD_ORDER = [
     ("ph_sgd", "PH-SGD"),
     ("window_sgd", "Window-SGD"),
     ("pf", "PF"),
+    ("pf_s", "PF-S"),
     ("wspf_a", "WSPF-A"),
     ("wspf_b", "WSPF-B"),
 ]
-# 旧図の配色を踏襲しつつ、追加2手法に別色を割当
+# 旧図の配色を踏襲しつつ、追加手法に別色を割当
 COLORS = {
     "SGD": "#7f7f7f",         # gray (旧図)
     "PH-SGD": "#ff7f0e",      # orange (新規)
     "Window-SGD": "#9467bd",  # purple (新規)
     "PF": "#1f77b4",          # blue (旧図)
+    "PF-S": "#17becf",        # teal (層化PF, 補正なし)
     "WSPF-A": "#2ca02c",      # green (旧図)
     "WSPF-B": "#d62728",      # crimson (旧図)
 }

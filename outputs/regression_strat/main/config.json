@@ -23,7 +23,8 @@
     "Window-SGD",
     "PF",
     "WSPF-A",
-    "WSPF-B"
+    "WSPF-B",
+    "PF-S"
   ],
   "oracle": true,
   "n_particles": {

@@ -71,9 +71,10 @@ def resolve_workers(n_jobs, requested=None):
 # ======================================================================
 SGD_METHODS = {"SGD", "PH-SGD", "Window-SGD"}
 FILTER_METHODS = {"PF", "WSPF-A", "WSPF-B", "Oracle",
-                  "PF-N", "WSPF-A-N", "WSPF-B-N"}
+                  "PF-N", "WSPF-A-N", "WSPF-B-N", "PF-S"}
 # φ_t 拡張 (-N = noise-adaptive): 観測ノイズを粒子別状態として推定する変種
 ADAPTIVE_METHODS = {"PF-N", "WSPF-A-N", "WSPF-B-N"}
+# 層化学習率アブレーション: PF-S = 補正項なし PF に層化学習率を適用
 ALL_METHODS = SGD_METHODS | FILTER_METHODS
 
 # base_seed からのフィルタ/初期化シードオフセット規約
@@ -89,6 +90,8 @@ SEED_OFFSET = {
     "PF-N": 21,
     "WSPF-B-N": 23,
     "WSPF-A-N": 25,
+    # 層化 PF (補正なし; 既存と非衝突)
+    "PF-S": 27,
 }
 
 # φ 専用 rng のシードは fseed + PHI_SEED_OFFSET (θ 系 rng と分離, 設計書 §5.2)
@@ -135,12 +138,15 @@ def _build_estimator(method, benchmark, n_particles, params, seed, funcs,
                             getattr(benchmark, "eta_scheme", "fixed"))
     eta_kwargs = dict(eta_scheme=eta_scheme, eta_seed=fseed + ETA_SEED_OFFSET)
 
-    if method in ("PF", "PF-N"):
+    if method in ("PF", "PF-N", "PF-S"):
+        # PF-S (補正なし PF に層化学習率) のみ eta_kwargs を適用。
+        # PF/PF-N は fixed (eta_kwargs 不使用) で従来と完全一致。
+        pf_eta = eta_kwargs if method == "PF-S" else {}
         return ParticleFilter(
             n_particles, d, eta=eta, sigma_sys=sigma_sys,
             prior_mean=prior_mean, prior_std=prior_std,
             ess_resample_ratio=ess_ratio, seed=fseed,
-            **adaptive_kwargs,
+            **adaptive_kwargs, **pf_eta,
         )
     if method in ("WSPF-B", "WSPF-B-N"):
         return WSPF_B(
@@ -423,7 +429,7 @@ def run_method(method, benchmark, n_particles, params, seed,
                     return g, np.zeros((p.shape[0], d, d))
             estimator.step(Xtr, ytr, per_sample_grad_fn, loglik_fn,
                            oracle_stats_fn)
-        elif method in ("PF", "PF-N"):
+        elif method in ("PF", "PF-N", "PF-S"):
             estimator.step(Xtr, ytr, grad_fn, loglik_fn,
                            loglik_sigma_fn=loglik_sigma_fn)
         else:  # WSPF-A(-N) / WSPF-B(-N)

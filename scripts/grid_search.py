@@ -31,7 +31,8 @@ from _common import (load_config, resolve_seeds, grid_search, hp_path,
 
 # φ_t 拡張: -N (noise-adaptive) 変種を含む。実際に探索するのは
 # config の methods に載っているものだけ (下の _filter_methods)。
-FILTER_METHODS = ["PF", "WSPF-A", "WSPF-B", "PF-N", "WSPF-A-N", "WSPF-B-N"]
+FILTER_METHODS = ["PF", "WSPF-A", "WSPF-B", "PF-N", "WSPF-A-N", "WSPF-B-N",
+                  "PF-S"]
 
 
 def _filter_methods(cfg):

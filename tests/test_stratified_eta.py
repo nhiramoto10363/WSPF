@@ -182,6 +182,33 @@ def test_stratified_runs_finite_and_diagnostics(cls):
     assert max(h["eta_weighted_mean"]) <= f.eta_slots.max() + 1e-9
 
 
+def test_pf_s_fixed_equals_pf():
+    """PF-S (層化 PF) の fixed が通常 PF とビット一致 (補正なし版の後方互換)。"""
+    from src.filters.pf import ParticleFilter
+    from src.models import create_regression_grad_fn
+    m = NeuralNetRegression(1, 8, 1)
+    gf = create_regression_grad_fn(m, 0.5)
+    ll = create_regression_loglik_fn(m, 0.5)
+    d = m.param_dim
+
+    def run(**kw):
+        f = ParticleFilter(60, d, eta=0.05, sigma_sys=0.05, prior_std=0.3,
+                           seed=1, **kw)
+        rng = np.random.default_rng(0)
+        for _ in range(40):
+            X = rng.normal(0, 1, (16, 1))
+            y = rng.normal(0, 1, 16)
+            f.step(X, y, gf, ll)
+        return f
+    pf = run()                                   # 既定 (= fixed)
+    pf_fix = run(eta_scheme="fixed", eta_seed=7)
+    pf_s = run(eta_scheme="stratified_exp", eta_seed=7)
+    assert np.array_equal(pf.particles, pf_fix.particles)   # 後方互換
+    assert np.isfinite(pf_s.particles).all()
+    assert not np.allclose(pf_fix.particles, pf_s.particles)
+    assert len(pf_s.history["eta_weighted_mean"]) == 40
+
+
 def test_diagnostics_helpers():
     eta = make_stratified_learning_rates(100, 0.05, seed=1)
     w = np.ones(100) / 100

@@ -1,10 +1,3 @@
-# ======================================================================
-# Regression 層化学習率 WSPF 実験 (Stratified Learning-Rate WSPF, 設計書)
-#   WSPF-A/B の学習率を粒子スロット別の層化配置 (指数分布, 平均 η̄) に。
-#   探索軸は増やさず eta→eta_wspf_mean (= eta/2.303) と読み替え (§11)。
-#   HP選択は混合NLL (select_metric: nll)。fixed版は regression.yaml。
-#   既存 configs/outputs は不変更。
-# ======================================================================
 benchmark: regression
 task_type: regression
 data:
@@ -28,6 +21,7 @@ methods:
 - PF
 - WSPF-A
 - WSPF-B
+- PF-S
 oracle: true
 n_particles:
   main: 100

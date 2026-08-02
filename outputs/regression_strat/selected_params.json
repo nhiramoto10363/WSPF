@@ -18,6 +18,12 @@
         "sigma_sys": 0.05,
         "prior_std": 0.3,
         "eta_scheme": "stratified_exp"
+      },
+      "PF-S": {
+        "eta": 0.043,
+        "sigma_sys": 0.005,
+        "prior_std": 0.5,
+        "eta_scheme": "stratified_exp"
       }
     }
   },

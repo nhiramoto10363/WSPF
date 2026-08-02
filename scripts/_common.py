@@ -246,6 +246,13 @@ def _param_grid(method, grid):
                 etas, grid["sigma_sys"], grid["prior_std"], tau_phi_axis):
             yield {"eta": eta, "sigma_sys": ss, "prior_std": ps,
                    "tau_phi": tp}
+    elif method == "PF-S":
+        # 層化 PF (補正なし): WSPF と同じ eta_wspf_mean 軸 + 層化スキームだが
+        # 補正項を持たない (層化の効果を補正から分離するアブレーション)。
+        for eta, ss, ps, so in itertools.product(
+                etas_wspf, grid["sigma_sys"], grid["prior_std"], sigma_obs_axis):
+            yield _wspf(_with_sigma_obs(
+                {"eta": eta, "sigma_sys": ss, "prior_std": ps}, so))
     elif method == "WSPF-B":
         for eta, ss, ps, so in itertools.product(
                 etas_wspf, grid["sigma_sys"], grid["prior_std"], sigma_obs_axis):
@@ -367,7 +374,7 @@ def load_selected(cfg):
 def get_params(selected, method, n_particles):
     """selected から (method, N) の最良パラメータを取り出す。"""
     if method in ("PF", "WSPF-A", "WSPF-B",
-                  "PF-N", "WSPF-A-N", "WSPF-B-N"):
+                  "PF-N", "WSPF-A-N", "WSPF-B-N", "PF-S"):
         return selected["by_n_particles"][str(n_particles)][method]
     return selected["no_n"][method]
 

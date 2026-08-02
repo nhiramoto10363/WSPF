@@ -26,5 +26,13 @@ WSPF-B        100  None  diagnostic   particle_spread                 1.01846   
 WSPF-B        100  None  diagnostic   unique_ancestor_rate_all        0.489378   0.0169665   10                                                                main      
 WSPF-B        100  None  diagnostic   unique_ancestor_rate_resampled  0.463971   0.00580942  10                                                                main      
 WSPF-B        100  None  diagnostic   resample_rate                   0.952444   0.0244888   10                                                                main      
+PF-S          100  None  performance  mse                             0.337054   0.0543729   10                                                                main      
+PF-S          100  None  diagnostic   ess_over_N                      0.605534   0.0174514   10                                                                main      
+PF-S          100  None  diagnostic   weight_entropy                  4.17282    0.0322128   10                                                                main      
+PF-S          100  None  diagnostic   max_weight                      0.0443518  0.00656251  10                                                                main      
+PF-S          100  None  diagnostic   particle_spread                 0.141621   0.176485    10                                                                main      
+PF-S          100  None  diagnostic   unique_ancestor_rate_all        0.83002    0.0148061   10                                                                main      
+PF-S          100  None  diagnostic   unique_ancestor_rate_resampled  0.487862   0.00958207  10                                                                main      
+PF-S          100  None  diagnostic   resample_rate                   0.331778   0.0267046   10                                                                main      
 WSPF-A_vs_PF  100  None  paired       mse_paired                                                      -0.0288929       0.0366636       0.0343064   0.00195312  main      
 WSPF-B_vs_PF  100  None  paired       mse_paired                                                      -0.0328643       0.0436185       0.0410513   0.00195312  main      

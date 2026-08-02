@@ -19,6 +19,9 @@ from .base import (
     propagate_phi,
     phi_to_sigma,
     weighted_sigma_mean,
+    make_stratified_learning_rates,
+    stratified_eta_diagnostics,
+    fast_to_slow_rate,
 )
 
 
@@ -48,6 +51,8 @@ class ParticleFilter:
         phi_init_mean=0.0,
         phi_init_std=0.5,
         phi_seed=None,
+        eta_scheme="fixed",
+        eta_seed=None,
     ):
         """
         Parameters
@@ -57,7 +62,7 @@ class ParticleFilter:
         param_dim : int
             パラメータの総次元数
         eta : float
-            学習率
+            学習率。層化版 (eta_scheme="stratified_exp") では分布の平均 η̄ の意味
         sigma_sys : float
             システムノイズの標準偏差
         prior_mean : float
@@ -79,10 +84,26 @@ class ParticleFilter:
             φ_0 の初期標準偏差
         phi_seed : int, optional
             φ 専用 rng のシード (θ 系の乱数列と分離するため独立に持つ)
+        eta_scheme : {"fixed", "stratified_exp"}
+            "fixed": 全粒子共通のスカラー eta (従来と完全一致)。
+            "stratified_exp": 指数分布の層化学習率をスロット別に配置 (PF-S:
+            補正項を持たない PF に層化学習率だけを適用したアブレーション)。
+        eta_seed : int, optional
+            η 層化専用 rng のシード (θ 系の乱数列と分離)
         """
         self.N = n_particles
         self.param_dim = param_dim
-        self.eta = eta
+        # --- 層化学習率 (PF-S): eta は平均 η̄。fixed では全スロット η̄ ---
+        self.eta_mean = float(eta)
+        self.eta_scheme = eta_scheme
+        if eta_scheme == "fixed":
+            self.eta_slots = np.full(self.N, self.eta_mean)
+        elif eta_scheme == "stratified_exp":
+            self.eta_slots = make_stratified_learning_rates(
+                self.N, self.eta_mean, eta_seed)
+        else:
+            raise ValueError(f"unknown eta_scheme: {eta_scheme!r}")
+        self.eta = self.eta_mean   # 後方互換のスカラー別名
         self.sigma_sys = sigma_sys
         self.ess_resample_ratio = ess_resample_ratio
 
@@ -128,6 +149,13 @@ class ParticleFilter:
             # --- φ_t 拡張診断 (adaptive_obs 時のみ追記) ---
             "sigma_hat_mean": [],    # 重み付き平均 σ̂_t = Σ w_i exp(φ_i/2)
             "phi_std": [],           # 粒子間 φ の std (φ 縮退の監視)
+            # --- 層化学習率診断 (§9; stratified_exp=PF-S 時のみ意味を持つ) ---
+            "eta_weighted_mean": [],
+            "eta_weighted_std": [],
+            "eta_slow_mass": [],
+            "eta_fast_mass": [],
+            "eta_map": [],
+            "eta_fast_to_slow_rate": [],
         }
         # 勾配評価の種別と累積カウント (R1-11)
         self.grad_eval_kind = "batch"   # PF はバッチ平均勾配
@@ -175,7 +203,7 @@ class ParticleFilter:
 
         self.particles = (
             self.particles
-            - self.eta * grad
+            - self.eta_slots[:, None] * grad
             + self.rng.normal(0.0, self.sigma_sys, size=self.particles.shape)
         )
 
@@ -210,12 +238,18 @@ class ParticleFilter:
         ll_mean = float((self.weights * ll).sum())
         sigma_hat_mean = (weighted_sigma_mean(self.weights, self.phi)
                           if self.adaptive_obs else None)
+        # 層化学習率診断 (§9): リサンプリング前の重みで評価
+        eta_wmean, eta_wstd, eta_slow, eta_fast, eta_map = \
+            stratified_eta_diagnostics(self.weights, self.eta_slots,
+                                       self.eta_mean)
         _t_wt = time.perf_counter()
 
-        # 4) ESSが低い場合はリサンプリング
+        # 4) ESSが低い場合はリサンプリング (η_i はスロット固定; θ・φ は複製)
+        eta_f2s = 0.0
         if ess < self.ess_resample_ratio * self.N:
             idx = systematic_resample(self.weights, self.rng)
             n_unique = int(np.unique(idx).size)
+            eta_f2s = fast_to_slow_rate(idx, self.eta_slots, self.eta_mean)
             self.particles = self.particles[idx]
             if self.adaptive_obs:
                 self.phi = self.phi[idx]   # φ も同一祖先で引き継ぐ
@@ -231,6 +265,14 @@ class ParticleFilter:
         if self.adaptive_obs:
             self.history["sigma_hat_mean"].append(sigma_hat_mean)
             self.history["phi_std"].append(float(np.std(self.phi)))
+
+        # 層化学習率診断 (§9)
+        self.history["eta_weighted_mean"].append(eta_wmean)
+        self.history["eta_weighted_std"].append(eta_wstd)
+        self.history["eta_slow_mass"].append(eta_slow)
+        self.history["eta_fast_mass"].append(eta_fast)
+        self.history["eta_map"].append(eta_map)
+        self.history["eta_fast_to_slow_rate"].append(eta_f2s)
 
         # 履歴に保存
         self.history["mean"].append(mean.copy())
