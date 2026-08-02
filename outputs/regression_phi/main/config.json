@@ -1,0 +1,123 @@
+{
+  "benchmark": "regression",
+  "task_type": "regression",
+  "data": {
+    "input_dim": 1,
+    "hidden_dim": 8,
+    "T": 500,
+    "batch_size": 16,
+    "test_size": 200,
+    "noise_schedule": "regime",
+    "noise_std": 0.3,
+    "noise_std_alt": 0.7,
+    "sigma_ref": 0.5,
+    "within_regime_drift": 0.0005,
+    "grad_clip_norm": 5.0,
+    "switch_points": [
+      100,
+      200,
+      300,
+      400
+    ]
+  },
+  "methods": [
+    "SGD",
+    "PF",
+    "WSPF-B",
+    "WSPF-A",
+    "PF-N",
+    "WSPF-B-N",
+    "WSPF-A-N"
+  ],
+  "oracle": false,
+  "n_particles": {
+    "main": 100,
+    "sweep": [
+      100
+    ]
+  },
+  "seeds": {
+    "selection": [
+      1000,
+      1001,
+      1002
+    ],
+    "evaluation": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ]
+  },
+  "grid": {
+    "eta": [
+      0.002,
+      0.005,
+      0.01,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5
+    ],
+    "sigma_sys": [
+      0.001,
+      0.005,
+      0.01,
+      0.05,
+      0.1,
+      0.15,
+      0.2
+    ],
+    "prior_std": [
+      0.01,
+      0.1,
+      0.2,
+      0.3,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "beta": [
+      0.8,
+      0.9,
+      0.95,
+      0.99
+    ],
+    "sigma_obs": [
+      0.2,
+      0.35,
+      0.5,
+      0.7,
+      1.0
+    ],
+    "tau_phi": [
+      0.01,
+      0.03,
+      0.05,
+      0.1,
+      0.2
+    ]
+  },
+  "eval": {
+    "eval_start": 50,
+    "select_start": 50,
+    "select_end": 150,
+    "post_switch_lag": 10,
+    "coverage_levels": [
+      0.5,
+      0.8,
+      0.9,
+      0.95
+    ],
+    "select_metric": "nll"
+  },
+  "output_dir": "outputs/regression_phi"
+}

@@ -1,0 +1,30 @@
+method        N    zone  kind         metric                          mean       std         n_seeds  mean_difference  std_difference  paired_t_p  wilcoxon_p  experiment
+SGD           100  None  performance  mse                             0.40896    0.136233    10                                                                main      
+PH-SGD        100  None  performance  mse                             0.411036   0.07799     10                                                                main      
+Window-SGD    100  None  performance  mse                             0.348469   0.0655812   10                                                                main      
+PF            100  None  performance  mse                             0.356126   0.0757117   10                                                                main      
+PF            100  None  diagnostic   ess_over_N                      0.518006   0.00955577  10                                                                main      
+PF            100  None  diagnostic   weight_entropy                  4.1081     0.0359853   10                                                                main      
+PF            100  None  diagnostic   max_weight                      0.0642361  0.00726812  10                                                                main      
+PF            100  None  diagnostic   particle_spread                 1.89474    0.275312    10                                                                main      
+PF            100  None  diagnostic   unique_ancestor_rate_all        0.783836   0.0130572   10                                                                main      
+PF            100  None  diagnostic   unique_ancestor_rate_resampled  0.534176   0.0092168   10                                                                main      
+PF            100  None  diagnostic   resample_rate                   0.463778   0.0211998   10                                                                main      
+WSPF-A        100  None  performance  mse                             0.327234   0.0422646   10                                                                main      
+WSPF-A        100  None  diagnostic   ess_over_N                      0.392645   0.0180357   10                                                                main      
+WSPF-A        100  None  diagnostic   weight_entropy                  3.88184    0.0452478   10                                                                main      
+WSPF-A        100  None  diagnostic   max_weight                      0.0962593  0.00741256  10                                                                main      
+WSPF-A        100  None  diagnostic   particle_spread                 1.18925    0.317335    10                                                                main      
+WSPF-A        100  None  diagnostic   unique_ancestor_rate_all        0.638422   0.0226862   10                                                                main      
+WSPF-A        100  None  diagnostic   unique_ancestor_rate_resampled  0.501895   0.00799031  10                                                                main      
+WSPF-A        100  None  diagnostic   resample_rate                   0.725556   0.0377156   10                                                                main      
+WSPF-B        100  None  performance  mse                             0.323262   0.035309    10                                                                main      
+WSPF-B        100  None  diagnostic   ess_over_N                      0.331185   0.0113799   10                                                                main      
+WSPF-B        100  None  diagnostic   weight_entropy                  3.71147    0.0223594   10                                                                main      
+WSPF-B        100  None  diagnostic   max_weight                      0.0856745  0.00280165  10                                                                main      
+WSPF-B        100  None  diagnostic   particle_spread                 1.01846    0.187503    10                                                                main      
+WSPF-B        100  None  diagnostic   unique_ancestor_rate_all        0.489378   0.0169665   10                                                                main      
+WSPF-B        100  None  diagnostic   unique_ancestor_rate_resampled  0.463971   0.00580942  10                                                                main      
+WSPF-B        100  None  diagnostic   resample_rate                   0.952444   0.0244888   10                                                                main      
+WSPF-A_vs_PF  100  None  paired       mse_paired                                                      -0.0288929       0.0366636       0.0343064   0.00195312  main      
+WSPF-B_vs_PF  100  None  paired       mse_paired                                                      -0.0328643       0.0436185       0.0410513   0.00195312  main      

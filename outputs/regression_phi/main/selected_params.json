@@ -1,0 +1,51 @@
+{
+  "by_n_particles": {
+    "100": {
+      "PF": {
+        "eta": 0.05,
+        "sigma_sys": 0.05,
+        "prior_std": 0.5,
+        "sigma_obs": 0.5
+      },
+      "WSPF-A": {
+        "eta": 0.1,
+        "sigma_sys": 0.1,
+        "prior_std": 0.2,
+        "beta": 0.9,
+        "sigma_obs": 0.5
+      },
+      "WSPF-B": {
+        "eta": 0.002,
+        "sigma_sys": 0.15,
+        "prior_std": 0.5,
+        "sigma_obs": 0.5
+      },
+      "PF-N": {
+        "eta": 0.05,
+        "sigma_sys": 0.05,
+        "prior_std": 0.2,
+        "tau_phi": 0.2
+      },
+      "WSPF-A-N": {
+        "eta": 0.05,
+        "sigma_sys": 0.05,
+        "prior_std": 0.5,
+        "beta": 0.8,
+        "tau_phi": 0.2
+      },
+      "WSPF-B-N": {
+        "eta": 0.05,
+        "sigma_sys": 0.05,
+        "prior_std": 0.01,
+        "tau_phi": 0.2
+      }
+    }
+  },
+  "no_n": {
+    "SGD": {
+      "eta": 0.05,
+      "prior_std": 0.5,
+      "sigma_obs": 0.7
+    }
+  }
+}
