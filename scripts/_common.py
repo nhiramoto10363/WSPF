@@ -150,11 +150,18 @@ def primary_score(result, cfg, region="selection"):
     回帰: 平均 MSE(小さいほど良い) → そのまま
     分類: 平均 F1(大きいほど良い) → 符号反転して「小さいほど良い」に統一
     region: 'selection'(HP選択, 既定) / 'report'(最終評価) / 'all'
+
+    φ_t 拡張 (設計書 §5.3): cfg["eval"]["select_metric"] = "nll" のとき、
+    **選択区間に限り** 平均 NLL で選ぶ(σ_obs / τ_φ は MSE では識別できない
+    ため)。既定 "mse" で完全後方互換。報告区間の集計は従来通り。
     """
     metrics = result["metrics"]
     mask = region_mask(result, region)
     if cfg["task_type"] == "regression":
-        v = np.asarray(metrics["mse"])[mask]
+        select_metric = cfg.get("eval", {}).get("select_metric", "mse")
+        key = "nll" if (region == "selection"
+                        and select_metric == "nll") else "mse"
+        v = np.asarray(metrics[key])[mask]
         return float(np.nanmean(v))
     else:
         v = np.asarray(metrics["f1"])[mask]
@@ -173,9 +180,21 @@ def _param_grid(method, grid):
     config の grid にキーが無ければ単一既定値で1点だけ探索する。
     """
     etas = grid["eta"]
+    # φ_t 拡張 (設計書 §5.3): grid に sigma_obs があれば、固定 σ 手法
+    # (非 -N)の探索軸に加える(真値注入の廃止)。無ければ従来通り
+    # 軸なし(= benchmark の obs_sigma を使用)。
+    sigma_obs_axis = grid.get("sigma_obs", [None])
+    tau_phi_axis = grid.get("tau_phi", [0.05])
+
+    def _with_sigma_obs(base, so):
+        if so is not None:
+            base["sigma_obs"] = so
+        return base
+
     if method == "SGD":
-        for eta, ps in itertools.product(etas, grid["prior_std"]):
-            yield {"eta": eta, "prior_std": ps}
+        for eta, ps, so in itertools.product(
+                etas, grid["prior_std"], sigma_obs_axis):
+            yield _with_sigma_obs({"eta": eta, "prior_std": ps}, so)
     elif method == "PH-SGD":
         deltas = grid.get("ph_delta", [0.005])
         lambdas = grid.get("ph_lambda", [5.0])
@@ -191,20 +210,37 @@ def _param_grid(method, grid):
                 etas, grid["prior_std"], windows, passes):
             yield {"eta": eta, "prior_std": ps, "window": w, "n_passes": k}
     elif method == "WSPF-A":
-        for eta, ss, ps, beta in itertools.product(
-                etas, grid["sigma_sys"], grid["prior_std"], grid["beta"]):
-            yield {"eta": eta, "sigma_sys": ss, "prior_std": ps, "beta": beta}
+        for eta, ss, ps, beta, so in itertools.product(
+                etas, grid["sigma_sys"], grid["prior_std"], grid["beta"],
+                sigma_obs_axis):
+            yield _with_sigma_obs(
+                {"eta": eta, "sigma_sys": ss, "prior_std": ps, "beta": beta},
+                so)
+    elif method == "WSPF-A-N":
+        # -N 変種: sigma_obs 軸は持たず (φ が σ を推定)、tau_phi 軸を持つ
+        for eta, ss, ps, beta, tp in itertools.product(
+                etas, grid["sigma_sys"], grid["prior_std"], grid["beta"],
+                tau_phi_axis):
+            yield {"eta": eta, "sigma_sys": ss, "prior_std": ps,
+                   "beta": beta, "tau_phi": tp}
+    elif method in ("PF-N", "WSPF-B-N"):
+        for eta, ss, ps, tp in itertools.product(
+                etas, grid["sigma_sys"], grid["prior_std"], tau_phi_axis):
+            yield {"eta": eta, "sigma_sys": ss, "prior_std": ps,
+                   "tau_phi": tp}
     else:  # PF, WSPF-B, Oracle
-        for eta, ss, ps in itertools.product(
-                etas, grid["sigma_sys"], grid["prior_std"]):
-            yield {"eta": eta, "sigma_sys": ss, "prior_std": ps}
+        for eta, ss, ps, so in itertools.product(
+                etas, grid["sigma_sys"], grid["prior_std"], sigma_obs_axis):
+            yield _with_sigma_obs(
+                {"eta": eta, "sigma_sys": ss, "prior_std": ps}, so)
 
 
 def _is_boundary(best, grid):
     """best の各パラメータがグリッド端点にあるか(自動拡張の警告用, 修正方針11)。"""
     hits = []
     for key, gkey in (("eta", "eta"), ("sigma_sys", "sigma_sys"),
-                      ("prior_std", "prior_std"), ("beta", "beta")):
+                      ("prior_std", "prior_std"), ("beta", "beta"),
+                      ("sigma_obs", "sigma_obs"), ("tau_phi", "tau_phi")):
         if key in best and gkey in grid:
             g = grid[gkey]
             if best[key] in (min(g), max(g)):
@@ -307,7 +343,8 @@ def load_selected(cfg):
 
 def get_params(selected, method, n_particles):
     """selected から (method, N) の最良パラメータを取り出す。"""
-    if method in ("PF", "WSPF-A", "WSPF-B"):
+    if method in ("PF", "WSPF-A", "WSPF-B",
+                  "PF-N", "WSPF-A-N", "WSPF-B-N"):
         return selected["by_n_particles"][str(n_particles)][method]
     return selected["no_n"][method]
 

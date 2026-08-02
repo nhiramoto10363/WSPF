@@ -70,7 +70,10 @@ def resolve_workers(n_jobs, requested=None):
 # メソッド分類
 # ======================================================================
 SGD_METHODS = {"SGD", "PH-SGD", "Window-SGD"}
-FILTER_METHODS = {"PF", "WSPF-A", "WSPF-B", "Oracle"}
+FILTER_METHODS = {"PF", "WSPF-A", "WSPF-B", "Oracle",
+                  "PF-N", "WSPF-A-N", "WSPF-B-N"}
+# φ_t 拡張 (-N = noise-adaptive): 観測ノイズを粒子別状態として推定する変種
+ADAPTIVE_METHODS = {"PF-N", "WSPF-A-N", "WSPF-B-N"}
 ALL_METHODS = SGD_METHODS | FILTER_METHODS
 
 # base_seed からのフィルタ/初期化シードオフセット規約
@@ -82,7 +85,14 @@ SEED_OFFSET = {
     "SGD": 10,
     "PH-SGD": 10,
     "Window-SGD": 10,
+    # -N 変種 (既存と非衝突)
+    "PF-N": 21,
+    "WSPF-B-N": 23,
+    "WSPF-A-N": 25,
 }
+
+# φ 専用 rng のシードは fseed + PHI_SEED_OFFSET (θ 系 rng と分離, 設計書 §5.2)
+PHI_SEED_OFFSET = 200
 
 
 # ======================================================================
@@ -105,24 +115,39 @@ def _build_estimator(method, benchmark, n_particles, params, seed, funcs,
     grad_clip = getattr(benchmark, "grad_clip_norm", None)
     fseed = (seed + SEED_OFFSET[method]) if filter_seed is None else filter_seed
 
-    if method == "PF":
+    # φ_t 拡張 (-N 変種): adaptive_obs 一式。φ_0 の平均は 2 log σ_ref。
+    adaptive_kwargs = {}
+    if method in ADAPTIVE_METHODS:
+        sigma_ref = float(funcs.get("sigma_ref", funcs.get("obs_sigma", 1.0)))
+        adaptive_kwargs = dict(
+            adaptive_obs=True,
+            tau_phi=float(params.get("tau_phi", 0.05)),
+            phi_init_mean=2.0 * np.log(max(sigma_ref, 1e-12)),
+            phi_init_std=float(params.get("phi_init_std", 0.5)),
+            phi_seed=fseed + PHI_SEED_OFFSET,
+        )
+
+    if method in ("PF", "PF-N"):
         return ParticleFilter(
             n_particles, d, eta=eta, sigma_sys=sigma_sys,
             prior_mean=prior_mean, prior_std=prior_std,
             ess_resample_ratio=ess_ratio, seed=fseed,
+            **adaptive_kwargs,
         )
-    if method == "WSPF-B":
+    if method in ("WSPF-B", "WSPF-B-N"):
         return WSPF_B(
             n_particles, d, eta=eta, sigma_sys=sigma_sys,
             prior_mean=prior_mean, prior_std=prior_std,
             ess_resample_ratio=ess_ratio, grad_clip_norm=grad_clip, seed=fseed,
+            **adaptive_kwargs,
         )
-    if method == "WSPF-A":
+    if method in ("WSPF-A", "WSPF-A-N"):
         return WSPF_A(
             n_particles, d, eta=eta, sigma_sys=sigma_sys,
             prior_mean=prior_mean, prior_std=prior_std,
             ess_resample_ratio=ess_ratio, grad_clip_norm=grad_clip,
             beta=params.get("beta", 0.9), seed=fseed,
+            **adaptive_kwargs,
         )
     if method == "Oracle":
         return OraclePF(
@@ -204,6 +229,7 @@ def run_method(method, benchmark, n_particles, params, seed,
     grad_fn = funcs["grad_fn"]
     per_sample_grad_fn = funcs.get("per_sample_grad_fn")
     loglik_fn = funcs["loglik_fn"]
+    loglik_sigma_fn = funcs.get("loglik_sigma_fn")       # φ_t 拡張 (-N 変種)
     predict_fn = funcs["predict_fn"]
     task_type = benchmark.task_type
     is_reg = task_type == "regression"
@@ -211,6 +237,14 @@ def run_method(method, benchmark, n_particles, params, seed,
     n_classes = int(getattr(benchmark, "n_classes", 2))
     is_multiclass = (not is_reg) and n_classes > 2
     obs_sigma = float(funcs.get("obs_sigma", 0.0)) if is_reg else 0.0
+    # σ_obs の HP 化 (設計書 §5.2): params に sigma_obs があれば、固定 σ 手法の
+    # 重み付け尤度と評価の両方をその値に置き換える(真値注入の廃止)。無ければ
+    # 従来通り benchmark の obs_sigma を使う(完全後方互換)。
+    if is_reg and method not in ADAPTIVE_METHODS and "sigma_obs" in params:
+        obs_sigma = float(params["sigma_obs"])
+        loglik_factory = funcs.get("loglik_fn_factory")
+        if loglik_factory is not None:
+            loglik_fn = loglik_factory(obs_sigma)
     levels = (0.5, 0.8, 0.9, 0.95)
 
     estimator = _build_estimator(method, benchmark, n_particles, params,
@@ -231,6 +265,7 @@ def run_method(method, benchmark, n_particles, params, seed,
     step_indices = []
     # 予測・診断保存用 (P6, R2-5): report 区間のサンプル単位を蓄積
     rep_y, rep_mean, rep_std, rep_probs = [], [], [], []
+    rep_sigma_hat = []   # φ_t 拡張: 報告ブロック代表の重み付き σ̂ (adaptive のみ)
     rep_block_step, rep_block_len = [], []   # 各報告ブロックの step_index と長さ
     train_idx_list, test_idx_list = [], []
 
@@ -270,14 +305,31 @@ def run_method(method, benchmark, n_particles, params, seed,
                 rep_block_step.append(int(stp.step_index))
                 rep_block_len.append(int(yint.size))
         elif has_test:
-            pred_mean, pred_var = M.weighted_prediction(
-                predict_fn, particles, weights, Xte)
+            # φ_t 拡張: 粒子別 σ を持つ手法は predict 行列を 1 回だけ計算し、
+            # NLL は混合ガウスで厳密に、CRPS/coverage はモーメント一致近似の
+            # std で評価する (設計書 §5.1)。それ以外は従来経路。
+            sigma_particles = getattr(estimator, "obs_sigma_particles", None) \
+                if is_reg else None
+            if sigma_particles is not None:
+                preds_mat = M.particle_prediction_matrix(
+                    predict_fn, particles, Xte)
+                pred_mean, pred_var = M.weighted_mean_var_from_preds(
+                    preds_mat, weights)
+            else:
+                pred_mean, pred_var = M.weighted_prediction(
+                    predict_fn, particles, weights, Xte)
             yte_arr = np.asarray(yte, dtype=np.float64).ravel()
             if is_reg:
                 _push("mse", M.test_mse(yte_arr, pred_mean))
                 _push("mae", M.test_mae(yte_arr, pred_mean))
-                pred_std = M.prediction_std_with_noise(pred_var, obs_sigma)
-                _push("nll", M.nll_gaussian(yte_arr, pred_mean, pred_std))
+                if sigma_particles is not None:
+                    pred_std = M.mixture_moment_std(
+                        pred_var, weights, sigma_particles)
+                    _push("nll", M.nll_gaussian_mixture(
+                        yte_arr, preds_mat, weights, sigma_particles))
+                else:
+                    pred_std = M.prediction_std_with_noise(pred_var, obs_sigma)
+                    _push("nll", M.nll_gaussian(yte_arr, pred_mean, pred_std))
                 _push("crps", M.crps_gaussian(yte_arr, pred_mean, pred_std))
                 cw = M.coverage_and_width(yte_arr, pred_mean, pred_std, levels)
                 for lvl in levels:
@@ -290,6 +342,11 @@ def run_method(method, benchmark, n_particles, params, seed,
                     rep_std.append(np.asarray(pred_std, np.float64).ravel())
                     rep_block_step.append(int(stp.step_index))
                     rep_block_len.append(int(yte_arr.size))
+                    if sigma_particles is not None:
+                        w_norm = np.asarray(weights, np.float64)
+                        w_norm = w_norm / max(w_norm.sum(), 1e-300)
+                        rep_sigma_hat.append(
+                            float(np.sum(w_norm * sigma_particles)))
             else:
                 # 分類: predict_fn は確率(あるいは logit)。[0,1] 外は sigmoid。
                 probs = pred_mean
@@ -349,10 +406,12 @@ def run_method(method, benchmark, n_particles, params, seed,
                     return g, np.zeros((p.shape[0], d, d))
             estimator.step(Xtr, ytr, per_sample_grad_fn, loglik_fn,
                            oracle_stats_fn)
-        elif method == "PF":
-            estimator.step(Xtr, ytr, grad_fn, loglik_fn)
-        else:  # WSPF-A / WSPF-B
-            estimator.step(Xtr, ytr, per_sample_grad_fn, loglik_fn)
+        elif method in ("PF", "PF-N"):
+            estimator.step(Xtr, ytr, grad_fn, loglik_fn,
+                           loglik_sigma_fn=loglik_sigma_fn)
+        else:  # WSPF-A(-N) / WSPF-B(-N)
+            estimator.step(Xtr, ytr, per_sample_grad_fn, loglik_fn,
+                           loglik_sigma_fn=loglik_sigma_fn)
 
     metrics_out = {k: np.asarray(v, dtype=np.float64) for k, v in metric_lists.items()}
     history = None
@@ -367,6 +426,9 @@ def run_method(method, benchmark, n_particles, params, seed,
     if is_reg:
         predictions["mean"] = _cat(rep_mean)
         predictions["std"] = _cat(rep_std)
+        if rep_sigma_hat:
+            # φ_t 拡張: 報告ブロックごとの重み付き σ̂ (block_step_index と整列)
+            predictions["sigma_hat"] = np.asarray(rep_sigma_hat, np.float64)
     else:
         predictions["probs"] = _cat(rep_probs)
     # サンプル→ステップ対応(§6): 各報告ブロックの step_index/長さと、

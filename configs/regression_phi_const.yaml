@@ -1,0 +1,51 @@
+# ======================================================================
+# Regression φ_t 実験 R0: constant スケジュールでの回帰チェック (設計書 §5.4)
+#   目的: (i) 非適応手法が sigma_obs グリッド (真値 0.5 を含む) の下で
+#            従来結果と整合すること
+#         (ii) 適応手法が定常ノイズ下で固定手法と同等の NLL を出すこと
+#            (適応がコストにならないことの確認)
+# ======================================================================
+benchmark: regression
+task_type: regression
+
+data:
+  input_dim: 1
+  hidden_dim: 8
+  T: 500
+  batch_size: 16
+  test_size: 200
+  noise_schedule: constant
+  noise_std: 0.5           # 現行 regression.yaml と同一
+  sigma_ref: 0.5
+  within_regime_drift: 0.0005
+  grad_clip_norm: 5.0
+  switch_points: [100, 200, 300, 400]
+
+methods: [SGD, PF, WSPF-B, WSPF-A, PF-N, WSPF-B-N, WSPF-A-N]
+oracle: false
+
+n_particles:
+  main: 100
+  sweep: [100]
+
+seeds:
+  selection: [1000, 1001, 1002]
+  evaluation: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+grid:
+  eta: [0.002, 0.005, 0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5]
+  sigma_sys: [0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2]
+  prior_std: [0.01, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0]
+  beta: [0.8, 0.9, 0.95, 0.99]
+  sigma_obs: [0.2, 0.35, 0.5, 0.7, 1.0]   # 真値 0.5 を含む
+  tau_phi: [0.01, 0.03, 0.05, 0.1, 0.2]
+
+eval:
+  eval_start: 50
+  select_start: 50
+  select_end: 150
+  post_switch_lag: 10
+  coverage_levels: [0.5, 0.8, 0.9, 0.95]
+  select_metric: nll
+
+output_dir: outputs/regression_phi_const

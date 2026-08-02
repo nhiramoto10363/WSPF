@@ -15,6 +15,10 @@ from .base import (
     systematic_resample,
     weight_diagnostics,
     ensemble_spread_trace,
+    init_phi,
+    propagate_phi,
+    phi_to_sigma,
+    weighted_sigma_mean,
 )
 
 
@@ -39,6 +43,11 @@ class ParticleFilter:
         prior_std=1.0,
         ess_resample_ratio=0.5,
         seed=None,
+        adaptive_obs=False,
+        tau_phi=0.05,
+        phi_init_mean=0.0,
+        phi_init_std=0.5,
+        phi_seed=None,
     ):
         """
         Parameters
@@ -59,6 +68,17 @@ class ParticleFilter:
             リサンプリングを行うESSの閾値（粒子数に対する比率）
         seed : int, optional
             乱数シード
+        adaptive_obs : bool
+            True なら観測ノイズ φ_t = log σ_t² を粒子別状態として推定する
+            (φ_t 拡張)。False なら従来と完全に同一挙動。
+        tau_phi : float
+            φ ランダムウォークの標準偏差 τ
+        phi_init_mean : float
+            φ_0 の初期平均 (通常 2 log σ_ref)
+        phi_init_std : float
+            φ_0 の初期標準偏差
+        phi_seed : int, optional
+            φ 専用 rng のシード (θ 系の乱数列と分離するため独立に持つ)
         """
         self.N = n_particles
         self.param_dim = param_dim
@@ -73,6 +93,17 @@ class ParticleFilter:
             prior_mean, prior_std, size=(self.N, param_dim)
         )
         self.weights = np.ones(self.N) / self.N
+
+        # --- φ_t 拡張: 粒子別観測ノイズ状態 ---
+        self.adaptive_obs = bool(adaptive_obs)
+        self.tau_phi = float(tau_phi)
+        if self.adaptive_obs:
+            self.phi_rng = np.random.default_rng(phi_seed)
+            self.phi = init_phi(self.phi_rng, self.N,
+                                phi_init_mean, phi_init_std)
+        else:
+            self.phi_rng = None
+            self.phi = None
 
         # 履歴
         self.history = {
@@ -94,13 +125,26 @@ class ParticleFilter:
             "t_weight": [],          # 重み正規化+診断の時間 [s]
             "t_resample": [],        # リサンプリングの時間 [s]
             "sample_grad_evals": [], # このステップの勾配評価数(PFはバッチ勾配=N)
+            # --- φ_t 拡張診断 (adaptive_obs 時のみ追記) ---
+            "sigma_hat_mean": [],    # 重み付き平均 σ̂_t = Σ w_i exp(φ_i/2)
+            "phi_std": [],           # 粒子間 φ の std (φ 縮退の監視)
         }
         # 勾配評価の種別と累積カウント (R1-11)
         self.grad_eval_kind = "batch"   # PF はバッチ平均勾配
         self.grad_calls = 0
         self.sample_grad_evals_total = 0
 
-    def step(self, X, y, grad_fn, loglik_fn):
+    @property
+    def obs_sigma_particles(self):
+        """粒子別観測ノイズ std σ^(i) = exp(φ^(i)/2)。非適応時は None。
+
+        runner が評価 (混合 NLL / モーメント一致 std) に使用する。
+        """
+        if not self.adaptive_obs:
+            return None
+        return phi_to_sigma(self.phi)
+
+    def step(self, X, y, grad_fn, loglik_fn, loglik_sigma_fn=None):
         """
         1ステップの更新
 
@@ -134,12 +178,24 @@ class ParticleFilter:
             - self.eta * grad
             + self.rng.normal(0.0, self.sigma_sys, size=self.particles.shape)
         )
+
+        # 1b) φ 遷移 (adaptive_obs 時のみ; φ 専用 rng を消費するため
+        #     θ 側の乱数列は非適応時と完全一致する)
+        if self.adaptive_obs:
+            self.phi = propagate_phi(self.phi, self.tau_phi, self.phi_rng)
         _t_corr = time.perf_counter()
 
         # 2) 尤度による重み更新（SIS の逐次累積: 前ステップの重みを保持）
         #    リサンプリングしないステップの重み情報を捨てないよう、WSPF と
         #    同じく log w_t = log w_{t-1} + log p(B_t | θ_t) を累積する。
-        ll = loglik_fn(self.particles, X, y)
+        #    adaptive_obs 時は粒子別 σ^(i)=exp(φ^(i)/2) の尤度を使う。
+        if self.adaptive_obs:
+            if loglik_sigma_fn is None:
+                raise ValueError(
+                    "adaptive_obs=True には loglik_sigma_fn が必要です")
+            ll = loglik_sigma_fn(self.particles, X, y, phi_to_sigma(self.phi))
+        else:
+            ll = loglik_fn(self.particles, X, y)
         _t_ll = time.perf_counter()
         log_prev = np.log(np.maximum(self.weights, 1e-300))
         self.weights = normalize_logweights(log_prev + ll)
@@ -152,6 +208,8 @@ class ParticleFilter:
         ess, entropy, max_weight = weight_diagnostics(self.weights)
         spread_trace = ensemble_spread_trace(self.particles)
         ll_mean = float((self.weights * ll).sum())
+        sigma_hat_mean = (weighted_sigma_mean(self.weights, self.phi)
+                          if self.adaptive_obs else None)
         _t_wt = time.perf_counter()
 
         # 4) ESSが低い場合はリサンプリング
@@ -159,12 +217,20 @@ class ParticleFilter:
             idx = systematic_resample(self.weights, self.rng)
             n_unique = int(np.unique(idx).size)
             self.particles = self.particles[idx]
+            if self.adaptive_obs:
+                self.phi = self.phi[idx]   # φ も同一祖先で引き継ぐ
             self.weights = np.ones(self.N) / self.N
             resampled = True
         else:
             n_unique = self.N
             resampled = False
         _t_rs = time.perf_counter()
+
+        # φ 診断 (adaptive_obs 時のみ; リサンプリング前の重みで σ̂ を評価
+        # したいので weights リセット前に計算済みの値を使う)
+        if self.adaptive_obs:
+            self.history["sigma_hat_mean"].append(sigma_hat_mean)
+            self.history["phi_std"].append(float(np.std(self.phi)))
 
         # 履歴に保存
         self.history["mean"].append(mean.copy())

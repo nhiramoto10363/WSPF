@@ -116,6 +116,34 @@ class NeuralNetRegression:
         ll = -0.5 * (residual ** 2) / (noise_std ** 2) - 0.5 * np.log(2 * np.pi * noise_std ** 2)
         return ll.sum(axis=1)  # (N,)
 
+    def loglik_batch_per_particle_sigma(self, flat_params, X, y, sigma):
+        """
+        粒子別の観測ノイズ std を用いたガウス対数尤度 (φ_t 拡張用)。
+
+        log p(B | θ_i, φ_i) = Σ_j [ −½ (y_j − f_i(x_j))² / σ_i²
+                                     − ½ log(2π σ_i²) ]
+
+        Parameters
+        ----------
+        flat_params : ndarray, shape (N, param_dim)
+        X : ndarray, shape (B, input_dim)
+        y : ndarray, shape (B,)
+        sigma : ndarray, shape (N,)
+            各粒子の観測ノイズ標準偏差 σ_i = exp(φ_i / 2)
+
+        Returns
+        -------
+        ll : ndarray, shape (N,)
+        """
+        output, _, _ = self.forward(flat_params, X)  # (N, B, 1)
+        output = output.squeeze(-1)                  # (N, B)
+        residual = output - y.reshape(1, -1)         # (N, B)
+
+        sigma = np.asarray(sigma, dtype=np.float64).reshape(-1, 1)  # (N, 1)
+        var = np.maximum(sigma ** 2, 1e-30)
+        ll = -0.5 * (residual ** 2) / var - 0.5 * np.log(2 * np.pi * var)
+        return ll.sum(axis=1)  # (N,)
+
     def grad_nll_batch(self, flat_params, X, y, noise_std=0.1):
         """
         負の対数尤度の勾配（MSE勾配と等価、スケール違い）
@@ -248,6 +276,28 @@ def create_regression_loglik_fn(model, noise_std=0.1):
     def loglik_fn(particles, X, y):
         return model.loglik_batch(particles, X, y, noise_std)
     return loglik_fn
+
+
+def create_regression_loglik_sigma_fn(model):
+    """粒子別 σ を受ける対数尤度関数を作成 (φ_t 拡張用)。
+
+    loglik_sigma_fn(particles, X, y, sigma(N,)) -> (N,)
+    """
+    def loglik_sigma_fn(particles, X, y, sigma):
+        return model.loglik_batch_per_particle_sigma(particles, X, y, sigma)
+    return loglik_sigma_fn
+
+
+def create_regression_loglik_fn_factory(model):
+    """スカラー σ から loglik_fn を作る factory (σ_obs の HP 化用)。
+
+    factory(sigma) -> loglik_fn(particles, X, y) -> (N,)
+    """
+    def factory(sigma):
+        def loglik_fn(particles, X, y):
+            return model.loglik_batch(particles, X, y, noise_std=float(sigma))
+        return loglik_fn
+    return factory
 
 
 def create_regression_per_sample_grad_fn(model, noise_std=0.1):

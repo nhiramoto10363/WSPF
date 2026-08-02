@@ -41,6 +41,10 @@ from .base import (
     systematic_resample,
     weight_diagnostics,
     ensemble_spread_trace,
+    init_phi,
+    propagate_phi,
+    phi_to_sigma,
+    weighted_sigma_mean,
 )
 from .wspf_b import compute_gradient_noise_variance, RHO_CLIP
 
@@ -189,6 +193,11 @@ class WSPF_A:
         grad_clip_norm=None,
         beta=0.9,
         seed=None,
+        adaptive_obs=False,
+        tau_phi=0.05,
+        phi_init_mean=0.0,
+        phi_init_std=0.5,
+        phi_seed=None,
     ):
         """
         Parameters
@@ -213,6 +222,17 @@ class WSPF_A:
             EMA の忘却係数 β ∈ [0, 1)
         seed : int, optional
             乱数シード
+        adaptive_obs : bool
+            True なら観測ノイズ φ_t = log σ_t² を粒子別状態として推定する
+            (φ_t 拡張)。False なら従来と完全に同一挙動。
+        tau_phi : float
+            φ ランダムウォークの標準偏差 τ
+        phi_init_mean : float
+            φ_0 の初期平均 (通常 2 log σ_ref)
+        phi_init_std : float
+            φ_0 の初期標準偏差
+        phi_seed : int, optional
+            φ 専用 rng のシード (θ 系の乱数列と分離)
         """
         self.N = n_particles
         self.param_dim = param_dim
@@ -233,6 +253,17 @@ class WSPF_A:
         # EMA 状態: 各粒子の勾配移動平均
         self.ema_m = np.zeros((self.N, param_dim))
         self.t_step = 0  # 時刻カウンタ
+
+        # --- φ_t 拡張: 粒子別観測ノイズ状態 ---
+        self.adaptive_obs = bool(adaptive_obs)
+        self.tau_phi = float(tau_phi)
+        if self.adaptive_obs:
+            self.phi_rng = np.random.default_rng(phi_seed)
+            self.phi = init_phi(self.phi_rng, self.N,
+                                phi_init_mean, phi_init_std)
+        else:
+            self.phi_rng = None
+            self.phi = None
 
         self.history = {
             "mean": [],
@@ -264,13 +295,23 @@ class WSPF_A:
             "t_weight": [],
             "t_resample": [],
             "sample_grad_evals": [], # このステップの per-sample 勾配評価数(=N*B)
+            # --- φ_t 拡張診断 (adaptive_obs 時のみ追記) ---
+            "sigma_hat_mean": [],    # 重み付き平均 σ̂_t = Σ w_i exp(φ_i/2)
+            "phi_std": [],           # 粒子間 φ の std (φ 縮退の監視)
         }
         # 勾配評価の種別と累積カウント (R1-11)
         self.grad_eval_kind = "per_sample"  # WSPF-A は per-sample 勾配が必要
         self.grad_calls = 0
         self.sample_grad_evals_total = 0
 
-    def step(self, X, y, per_sample_grad_fn, loglik_fn):
+    @property
+    def obs_sigma_particles(self):
+        """粒子別観測ノイズ std σ^(i) = exp(φ^(i)/2)。非適応時は None。"""
+        if not self.adaptive_obs:
+            return None
+        return phi_to_sigma(self.phi)
+
+    def step(self, X, y, per_sample_grad_fn, loglik_fn, loglik_sigma_fn=None):
         """
         1ステップの更新（Method A 補正付き）
 
@@ -326,7 +367,13 @@ class WSPF_A:
         )
         self.particles = self.particles - self.eta * g_hat + epsilon
 
+        # 4b) φ 遷移 (adaptive_obs 時のみ; φ 専用 rng → θ 側の乱数列は不変)
+        if self.adaptive_obs:
+            self.phi = propagate_phi(self.phi, self.tau_phi, self.phi_rng)
+
         # 5) 補正項 (Method A, 行列版; ここに Woodbury/Cholesky/logdet が入る)
+        #    φ は観測非依存の事前遷移から提案されるため prior–proposal 比の
+        #    φ ブロックは恒等的に 1。log R̂ は θ ブロックのみ (設計書 §0.3)。
         (log_correction, rho, logcorr_nonfinite_count,
          cond_M, jitter_count) = compute_correction_method_a(
             epsilon, xi_hat, deviations, self.eta,
@@ -334,8 +381,14 @@ class WSPF_A:
         )
         _t_corr = time.perf_counter()
 
-        # 6) 対数尤度
-        ll = loglik_fn(self.particles, X, y)
+        # 6) 対数尤度 (adaptive_obs 時は粒子別 σ^(i)=exp(φ^(i)/2) を使用)
+        if self.adaptive_obs:
+            if loglik_sigma_fn is None:
+                raise ValueError(
+                    "adaptive_obs=True には loglik_sigma_fn が必要です")
+            ll = loglik_sigma_fn(self.particles, X, y, phi_to_sigma(self.phi))
+        else:
+            ll = loglik_fn(self.particles, X, y)
         _t_ll = time.perf_counter()
 
         # 7) 重み更新（累積 + 尤度 + 補正）
@@ -354,6 +407,8 @@ class WSPF_A:
         ess, entropy, max_weight = weight_diagnostics(self.weights)
         spread_trace = ensemble_spread_trace(self.particles)
         rho_clip_count = int(np.sum(rho >= RHO_CLIP))
+        sigma_hat_mean = (weighted_sigma_mean(self.weights, self.phi)
+                          if self.adaptive_obs else None)
         _t_wt = time.perf_counter()
 
         # 9) EMA 更新（現在のバッチ勾配で更新）
@@ -365,12 +420,19 @@ class WSPF_A:
             n_unique = int(np.unique(idx).size)
             self.particles = self.particles[idx]
             self.ema_m = self.ema_m[idx]  # EMA 状態もリサンプリング
+            if self.adaptive_obs:
+                self.phi = self.phi[idx]   # φ も同一祖先で引き継ぐ
             self.weights = np.ones(self.N) / self.N
             resampled = True
         else:
             n_unique = self.N
             resampled = False
         _t_rs = time.perf_counter()
+
+        # φ 診断 (adaptive_obs 時のみ)
+        if self.adaptive_obs:
+            self.history["sigma_hat_mean"].append(sigma_hat_mean)
+            self.history["phi_std"].append(float(np.std(self.phi)))
 
         # 履歴に保存
         self.history["mean"].append(mean.copy())

@@ -126,6 +126,76 @@ def prediction_std_with_noise(pred_var, obs_sigma):
     return np.sqrt(np.maximum(pred_var, 0.0) + float(obs_sigma) ** 2)
 
 
+# ======================================================================
+# φ_t 拡張: 粒子別観測ノイズ σ^(i) を持つ予測分布の評価 (設計書 §5.1)
+# ======================================================================
+def particle_prediction_matrix(predict_fn, particles, X):
+    """predict_fn を呼び (N, M) の粒子別予測行列を返す(混合評価用)。"""
+    return _as_pred_matrix(predict_fn(particles, X))
+
+
+def weighted_mean_var_from_preds(preds, weights):
+    """(N, M) 予測行列から重み付き平均と粒子分散を計算する。
+
+    weighted_prediction と同一の集約規約だが、予測行列を再計算しないための
+    分離版 (混合 NLL と共有するため forward を 1 回に抑える)。
+    """
+    preds = _as_pred_matrix(preds)
+    w = np.asarray(weights, dtype=np.float64)
+    w = w / max(w.sum(), 1e-300)
+    pred_mean = np.sum(w[:, None] * preds, axis=0)
+    pred_var = np.sum(w[:, None] * (preds - pred_mean[None, :]) ** 2, axis=0)
+    return pred_mean, pred_var
+
+
+def nll_gaussian_mixture(y, preds, weights, sigmas):
+    """
+    粒子混合ガウス予測分布の平均 NLL(厳密, logsumexp)。
+
+        p(y_m) = Σ_i w_i N(y_m ; preds[i, m], sigmas[i]²)
+        NLL = −(1/M) Σ_m log p(y_m)
+
+    Parameters
+    ----------
+    y : ndarray (M,)
+    preds : ndarray (N, M)     粒子別予測 f_{θ^(i)}(x_m)
+    weights : ndarray (N,)     正規化重み
+    sigmas : ndarray (N,)      粒子別観測ノイズ std σ^(i) = exp(φ^(i)/2)
+    """
+    y = np.asarray(y, dtype=np.float64).ravel()
+    preds = _as_pred_matrix(preds)
+    w = np.asarray(weights, dtype=np.float64)
+    w = w / max(w.sum(), 1e-300)
+    sig = np.asarray(sigmas, dtype=np.float64).reshape(-1, 1)  # (N, 1)
+    var = np.maximum(sig ** 2, 1e-30)
+
+    # log N(y_m ; preds[i,m], var_i)  → (N, M)
+    log_comp = (-0.5 * np.log(2.0 * np.pi * var)
+                - (y[None, :] - preds) ** 2 / (2.0 * var))
+    log_w = np.log(np.maximum(w, 1e-300))[:, None]              # (N, 1)
+    a = log_w + log_comp                                        # (N, M)
+    amax = a.max(axis=0)                                        # (M,)
+    log_mix = amax + np.log(np.sum(np.exp(a - amax[None, :]), axis=0))
+    return float(-np.mean(log_mix))
+
+
+def mixture_moment_std(pred_var, weights, sigmas):
+    """
+    混合ガウス予測分布のモーメント一致による単一ガウス近似の std:
+
+        sqrt( Var_w(f) + Σ_i w_i σ_i² )
+
+    CRPS / coverage の閉形式(単一ガウス前提)を流用するための近似。
+    NLL は nll_gaussian_mixture で厳密に評価するのに対し、こちらは近似で
+    あることを論文の評価節に明記する (設計書 §5.1)。
+    """
+    w = np.asarray(weights, dtype=np.float64)
+    w = w / max(w.sum(), 1e-300)
+    sig = np.asarray(sigmas, dtype=np.float64)
+    noise_var = float(np.sum(w * sig ** 2))
+    return np.sqrt(np.maximum(pred_var, 0.0) + noise_var)
+
+
 def weighted_prediction_proba(predict_fn, particles, weights, X):
     """多クラス分類: 粒子ごとのクラス確率を重み平均する。
 

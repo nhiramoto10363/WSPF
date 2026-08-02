@@ -9,6 +9,8 @@ from .regression_nn import (
     NeuralNetRegression,
     create_regression_grad_fn,
     create_regression_loglik_fn,
+    create_regression_loglik_sigma_fn,
+    create_regression_loglik_fn_factory,
     create_regression_per_sample_grad_fn,
 )
 from .binary_nn import (
@@ -29,6 +31,8 @@ __all__ = [
     "NeuralNetRegression",
     "create_regression_grad_fn",
     "create_regression_loglik_fn",
+    "create_regression_loglik_sigma_fn",
+    "create_regression_loglik_fn_factory",
     "create_regression_per_sample_grad_fn",
     "NeuralNetModel",
     "create_nn_grad_fn",

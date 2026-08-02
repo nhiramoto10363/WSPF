@@ -29,7 +29,20 @@ import os
 from _common import (load_config, resolve_seeds, grid_search, hp_path,
                      estimate_obs_noise)
 
-FILTER_METHODS = ["PF", "WSPF-A", "WSPF-B"]
+# φ_t 拡張: -N (noise-adaptive) 変種を含む。実際に探索するのは
+# config の methods に載っているものだけ (下の _filter_methods)。
+FILTER_METHODS = ["PF", "WSPF-A", "WSPF-B", "PF-N", "WSPF-A-N", "WSPF-B-N"]
+
+
+def _filter_methods(cfg):
+    """config の methods にある粒子フィルタ手法を FILTER_METHODS 順で返す。
+
+    後方互換: 旧 config (methods 未指定の呼び出し経路は無い) でも
+    [PF, WSPF-A, WSPF-B] がそのまま選ばれる。
+    """
+    wanted = set(cfg.get("methods", []))
+    ms = [m for m in FILTER_METHODS if m in wanted]
+    return ms if ms else ["PF", "WSPF-A", "WSPF-B"]
 
 
 def _gefcom_contexts(cfg):
@@ -83,10 +96,11 @@ def main():
 
     # 粒子フィルタ: 既定は N=main のみ(主分析)。--tune-all-n で全 N(Supplement)。
     target_ns = n_sweep if args.tune_all_n else [n_main]
+    fmethods = _filter_methods(cfg)
     for n in target_ns:
         print(f"[N={n}]")
         result["by_n_particles"][str(n)] = {}
-        for m in FILTER_METHODS:
+        for m in fmethods:
             best, score = grid_search(m, cfg, n, sel, contexts=contexts)
             result["by_n_particles"][str(n)][m] = best
 

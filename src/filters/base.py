@@ -171,6 +171,37 @@ def weight_diagnostics(w):
     return ess, entropy, max_weight
 
 
+# ================================================================
+# φ_t 拡張: 粒子別観測ノイズ (log 分散パラメータ) の共通ヘルパ
+# ================================================================
+def init_phi(phi_rng, n_particles, phi_init_mean, phi_init_std):
+    """φ_0^(i) ~ N(phi_init_mean, phi_init_std²) の初期化。
+
+    phi_init_mean は通常 2 log σ_ref (σ_ref: 観測ノイズの参照スケール)。
+    """
+    return phi_rng.normal(phi_init_mean, phi_init_std, size=n_particles)
+
+
+def propagate_phi(phi, tau_phi, phi_rng):
+    """φ_t = φ_{t−1} + ν_t, ν_t ~ N(0, τ²) のランダムウォーク遷移。
+
+    観測非依存の事前遷移からのブートストラップ提案なので、
+    prior–proposal 補正 (log R̂) には一切寄与しない (設計書 §0.3)。
+    τ=0 でも rng を消費する点に注意 (φ 専用 rng なので θ 側とは干渉しない)。
+    """
+    return phi + phi_rng.normal(0.0, tau_phi, size=phi.shape)
+
+
+def phi_to_sigma(phi):
+    """σ^(i) = exp(φ^(i)/2)。"""
+    return np.exp(0.5 * phi)
+
+
+def weighted_sigma_mean(weights, phi):
+    """重み付き平均 σ̂ = Σ_i w_i exp(φ_i/2) (診断: σ̂_t 系列)。"""
+    return float(np.sum(weights * phi_to_sigma(phi)))
+
+
 def ensemble_spread_trace(particles):
     """
     パラメータ空間での粒子群の広がり = 標本共分散のトレース

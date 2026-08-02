@@ -22,6 +22,8 @@ from src.models import (
     NeuralNetRegression,
     create_regression_grad_fn,
     create_regression_loglik_fn,
+    create_regression_loglik_sigma_fn,
+    create_regression_loglik_fn_factory,
     create_regression_per_sample_grad_fn,
 )
 from src.benchmarks.base import Benchmark, StreamStep
@@ -32,13 +34,17 @@ ORACLE_CHUNK = 2500        # メモリ節約のためのチャンク分割
 
 
 def oracle_grad_stats(model, particles, theta_star, noise_std, M, B,
-                      rng, chunk=ORACLE_CHUNK):
+                      rng, chunk=ORACLE_CHUNK, grad_sigma_ref=None):
     """
-    時刻 t の真の分布 (x~N(0,1), y=f(θ*;x)+N(0,σ²)) から大標本を引き、
+    時刻 t の真の分布 (x~N(0,1), y=f(θ*;x)+N(0,σ*_t²)) から大標本を引き、
     各粒子 θ^i について ∇L(θ^i)=E[∇ℓ] と Σ(θ^i)=Cov(ĝ_batch)=C(θ^i)/B を
     高精度推定する。チャンク処理で (N,M,d) の一括確保を避ける。
 
     旧 `experiments/oracle_regression.py::oracle_grad_stats` と同一実装。
+    φ_t 拡張 (noise_schedule != "constant") では、データ生成ノイズ noise_std
+    (= σ*_t) と勾配の定数スケール grad_sigma_ref (= σ_ref) を分離する。
+    grad_sigma_ref=None なら従来通り noise_std を勾配スケールにも使う
+    (constant スケジュールで完全後方互換)。
 
     Returns
     -------
@@ -46,7 +52,8 @@ def oracle_grad_stats(model, particles, theta_star, noise_std, M, B,
     Sigma  : ndarray (N, d, d) 勾配ノイズ共分散 Cov(ĝ_batch) = C/B
     """
     N, d = particles.shape
-    ps_grad_fn = create_regression_per_sample_grad_fn(model, noise_std)
+    _sigma_grad = noise_std if grad_sigma_ref is None else grad_sigma_ref
+    ps_grad_fn = create_regression_per_sample_grad_fn(model, _sigma_grad)
     sum_g = np.zeros((N, d))
     sum_ggT = np.zeros((N, d, d))
     done = 0
@@ -76,11 +83,29 @@ class RegressionSwitchBenchmark(Benchmark):
     def __init__(self, T=500, batch_size=16, test_size=200, noise_std=0.5,
                  hidden_dim=8, input_dim=1, within_regime_drift=0.0005,
                  grad_clip_norm=5.0, oracle_samples=ORACLE_SAMPLES,
-                 eval_start=50, select_start=50, select_end=150):
+                 eval_start=50, select_start=50, select_end=150,
+                 noise_schedule="constant", noise_std_alt=None,
+                 noise_rw_tau=0.0, sigma_ref=None):
         self.T = int(T)
         self.batch_size = int(batch_size)
         self.test_size = int(test_size)
         self.noise_std = float(noise_std)
+        # --- φ_t 拡張: 観測ノイズ σ*_t のスケジュール ---
+        #   "constant": σ*_t ≡ noise_std (従来と同一)
+        #   "regime"  : θ*₁ レジームで noise_std、θ*₂ レジームで noise_std_alt
+        #               (レジーム切替と完全同期)
+        #   "rw"      : log σ*_t = log σ*_{t−1} + N(0, noise_rw_tau²)
+        if noise_schedule not in ("constant", "regime", "rw"):
+            raise ValueError(f"unknown noise_schedule: {noise_schedule!r}")
+        self.noise_schedule = noise_schedule
+        if noise_schedule == "regime" and noise_std_alt is None:
+            raise ValueError("noise_schedule='regime' には noise_std_alt が必要")
+        self.noise_std_alt = None if noise_std_alt is None else float(noise_std_alt)
+        self.noise_rw_tau = float(noise_rw_tau)
+        # 伝播勾配・固定 σ 尤度の既定スケール σ_ref。None なら noise_std
+        # (constant スケジュールで完全後方互換)。
+        self.sigma_ref = float(sigma_ref) if sigma_ref is not None \
+            else self.noise_std
         self.hidden_dim = int(hidden_dim)
         self.input_dim = int(input_dim)
         self.within_regime_drift = float(within_regime_drift)
@@ -106,8 +131,9 @@ class RegressionSwitchBenchmark(Benchmark):
 
         # seed ごとの生成データキャッシュ
         self._cache = {}
-        # build_functions / stream が最後に扱った seed の真パラメータ
+        # build_functions / stream が最後に扱った seed の真パラメータ・真ノイズ
         self.theta_true = None
+        self.sigma_true = None
 
     # ------------------------------------------------------------------
     # データ生成 (generate_regression_regime_data と同一)
@@ -145,19 +171,43 @@ class RegressionSwitchBenchmark(Benchmark):
                 theta_true[t] = theta_true[t - 1] + rng.normal(
                     0.0, self.within_regime_drift, size=param_dim)
 
+        # --- 観測ノイズ σ*_t 系列 (φ_t 拡張, §2) ---
+        # "constant" は従来と同一の定数列。"regime" は regime_thetas の並び
+        # [θ1,θ2,θ1,θ2,θ1] に同期して [σ, σ_alt, σ, σ_alt, σ]。
+        # "rw" は log σ のランダムウォーク (τ=0 なら constant と同値)。
+        # 注: rng の消費は "rw" のときのみ増える。constant/regime では
+        # 乱数列が現行実装と完全一致する (回帰テストの前提)。
+        if self.noise_schedule == "regime":
+            sigma_by_regime = [self.noise_std, self.noise_std_alt,
+                               self.noise_std, self.noise_std_alt,
+                               self.noise_std]
+            sigma_true = np.array([sigma_by_regime[regime_ids[t]]
+                                   for t in range(T)])
+        elif self.noise_schedule == "rw":
+            log_sigma = np.empty(T)
+            log_sigma[0] = np.log(self.noise_std)
+            if self.noise_rw_tau > 0.0:
+                incr = rng.normal(0.0, self.noise_rw_tau, size=T - 1)
+            else:
+                incr = np.zeros(T - 1)
+            log_sigma[1:] = log_sigma[0] + np.cumsum(incr)
+            sigma_true = np.exp(log_sigma)
+        else:  # "constant"
+            sigma_true = np.full(T, self.noise_std)
+
         X_train, y_train, X_test, y_test = [], [], [], []
         for t in range(T):
             theta_t = theta_true[t: t + 1]
             X = rng.normal(0.0, 1.0, size=(self.batch_size, model.input_dim))
             output, _, _ = model.forward(theta_t, X)
-            y = output.squeeze() + rng.normal(0.0, self.noise_std,
+            y = output.squeeze() + rng.normal(0.0, sigma_true[t],
                                               size=self.batch_size)
             X_train.append(X)
             y_train.append(y)
 
             Xte = rng.normal(0.0, 1.0, size=(self.test_size, model.input_dim))
             output_te, _, _ = model.forward(theta_t, Xte)
-            yte = output_te.squeeze() + rng.normal(0.0, self.noise_std,
+            yte = output_te.squeeze() + rng.normal(0.0, sigma_true[t],
                                                    size=self.test_size)
             X_test.append(Xte)
             y_test.append(yte)
@@ -167,6 +217,7 @@ class RegressionSwitchBenchmark(Benchmark):
             "X_test": X_test, "y_test": y_test,
             "theta_true": theta_true, "regime_ids": regime_ids,
             "switch_times": switch_times,
+            "sigma_true": sigma_true,
         }
         self._cache[seed] = data
         return data
@@ -176,17 +227,23 @@ class RegressionSwitchBenchmark(Benchmark):
     # ------------------------------------------------------------------
     def build_functions(self, seed: int) -> dict:
         model = self.model
-        noise_std = self.noise_std
+        # 伝播勾配・既定の固定 σ 尤度は σ_ref でスケールする (φ_t 拡張, §3)。
+        # constant スケジュールの既定では sigma_ref == noise_std なので
+        # 従来と完全に同一。
+        sigma_ref = self.sigma_ref
 
-        # oracle_stats_fn がステップ別の真パラメータを引けるよう、
+        # oracle_stats_fn がステップ別の真パラメータ・真ノイズを引けるよう、
         # ここで対象 seed の生成データを確定させる。
         data = self._generate(seed)
         self.theta_true = data["theta_true"]
+        self.sigma_true = data["sigma_true"]
 
-        raw_grad = create_regression_grad_fn(model, noise_std)
+        raw_grad = create_regression_grad_fn(model, sigma_ref)
         per_sample_grad_fn = create_regression_per_sample_grad_fn(
-            model, noise_std)
-        loglik_fn = create_regression_loglik_fn(model, noise_std)
+            model, sigma_ref)
+        loglik_fn = create_regression_loglik_fn(model, sigma_ref)
+        loglik_sigma_fn = create_regression_loglik_sigma_fn(model)
+        loglik_fn_factory = create_regression_loglik_fn_factory(model)
         clip = self.grad_clip_norm
 
         def grad_fn(theta, X, y):
@@ -206,7 +263,15 @@ class RegressionSwitchBenchmark(Benchmark):
             "per_sample_grad_fn": per_sample_grad_fn,
             "loglik_fn": loglik_fn,
             "predict_fn": predict_fn,
-            "obs_sigma": noise_std,
+            # 既定の評価用 σ (後方互換)。φ 実験では runner が params["sigma_obs"]
+            # または粒子別 σ で上書きする。
+            "obs_sigma": sigma_ref,
+            "sigma_ref": sigma_ref,
+            # φ_t 拡張 (§3): 粒子別 σ 尤度と、スカラー σ→loglik_fn の factory
+            "loglik_sigma_fn": loglik_sigma_fn,
+            "loglik_fn_factory": loglik_fn_factory,
+            # 診断用: 真の σ*_t 系列 (T,)
+            "sigma_true": data["sigma_true"],
             # runner は f["oracle_stats_fn"](step_index, rng) で
             # ステップ別クロージャ (particles, X, y) -> (grad_L, Sigma) を得る。
             "oracle_stats_fn": self.oracle_stats_fn_for_step,
@@ -235,12 +300,17 @@ class RegressionSwitchBenchmark(Benchmark):
                 "theta_true が未確定です。先に build_functions(seed) または "
                 "stream(seed) を呼んでください。")
         theta_star_t = self.theta_true[step_index]
+        # φ_t 拡張: データ生成ノイズは真の σ*_t、勾配スケールは σ_ref で分離。
+        # constant スケジュールでは両者一致 → 従来と同一。
+        sigma_star_t = float(self.sigma_true[step_index]) \
+            if getattr(self, "sigma_true", None) is not None else self.noise_std
 
         def _closure(particles, X, y):
             # X, y は真分布から MC 再サンプルするため実バッチは使わない
             return oracle_grad_stats(
-                self.model, particles, theta_star_t, self.noise_std,
-                self.oracle_samples, self.batch_size, rng)
+                self.model, particles, theta_star_t, sigma_star_t,
+                self.oracle_samples, self.batch_size, rng,
+                grad_sigma_ref=self.sigma_ref)
 
         return _closure
 
@@ -250,6 +320,7 @@ class RegressionSwitchBenchmark(Benchmark):
     def stream(self, seed: int):
         data = self._generate(seed)
         self.theta_true = data["theta_true"]
+        self.sigma_true = data["sigma_true"]
         switch_times = set(data["switch_times"])
         regime_ids = data["regime_ids"]
 

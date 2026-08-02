@@ -1,0 +1,67 @@
+# ======================================================================
+# Regression φ_t 実験 (観測ノイズの状態空間組み込み, 設計書 §5.3)
+#   主実験 R1: レジーム同期の σ*_t 切替 (0.3 / 0.7)。
+#   2×2 比較 (補正あり/なし × φ 適応あり/なし) で両者の寄与を分離する。
+#   既存の regression.yaml / outputs/regression には一切影響しない。
+# ======================================================================
+benchmark: regression
+task_type: regression
+
+# --- データ生成 ---
+data:
+  input_dim: 1
+  hidden_dim: 8            # param_dim = (1+1)*8 + (8+1)*1 = 25
+  T: 500
+  batch_size: 16
+  test_size: 200
+  # φ_t 拡張: レジーム同期の観測ノイズ切替
+  noise_schedule: regime   # constant | regime | rw
+  noise_std: 0.3           # θ*₁ レジームの σ*
+  noise_std_alt: 0.7       # θ*₂ レジームの σ*
+  # 伝播勾配・固定 σ 尤度の参照スケール (σ_ref)。両レジームの中間に固定。
+  # 勾配の定数スケールでしかなく η のグリッドで吸収されるため、値の選び方は
+  # 結果に本質的影響を持たない (設計書 §3)。結果を見て必要なら再設定する。
+  sigma_ref: 0.5
+  within_regime_drift: 0.0005
+  grad_clip_norm: 5.0
+  switch_points: [100, 200, 300, 400]
+
+# --- 手法 ---
+#   固定 σ 組: SGD, PF, WSPF-B, WSPF-A (sigma_obs を HP として探索)
+#   φ 適応組 : PF-N, WSPF-B-N, WSPF-A-N (tau_phi を HP として探索)
+methods: [SGD, PF, WSPF-B, WSPF-A, PF-N, WSPF-B-N, WSPF-A-N]
+oracle: false              # φ 実験では Oracle は走らせない (第一弾)
+
+# --- 粒子数 ---
+n_particles:
+  main: 100
+  sweep: [100]             # 第一弾は N=100 のみ
+
+# --- シード (選択と評価を分離; regression.yaml と同一規約) ---
+seeds:
+  selection: [1000, 1001, 1002]
+  evaluation: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+# --- グリッドサーチ範囲 ---
+grid:
+  eta: [0.002, 0.005, 0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5]
+  sigma_sys: [0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2]
+  prior_std: [0.01, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0]
+  beta: [0.8, 0.9, 0.95, 0.99]          # WSPF-A / WSPF-A-N
+  # 固定 σ 手法の観測 std (真値注入の廃止; 真値 0.3/0.7 を直接は含めない)
+  sigma_obs: [0.2, 0.35, 0.5, 0.7, 1.0]
+  # φ 適応手法のランダムウォーク幅 τ
+  tau_phi: [0.01, 0.03, 0.05, 0.1, 0.2]
+
+# --- 評価 ---
+eval:
+  eval_start: 50
+  select_start: 50
+  select_end: 150
+  post_switch_lag: 10
+  coverage_levels: [0.5, 0.8, 0.9, 0.95]
+  # φ 実験の HP 選択指標: y に対する予測 NLL (設計書 §5.3)。
+  # 適応手法は混合ガウス NLL (厳密)、固定手法は単一ガウス NLL。
+  select_metric: nll
+
+output_dir: outputs/regression_phi
