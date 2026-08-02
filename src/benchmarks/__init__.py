@@ -12,6 +12,7 @@ PF / WSPF-A / WSPF-B / Oracle / SGD 系を同一ループで駆動できる。
 from src.benchmarks.base import Benchmark, StreamStep
 from src.benchmarks.regression_switch import RegressionSwitchBenchmark
 from src.benchmarks.gefcom import GefcomBenchmark
+from src.benchmarks.gefcom_price import GefcomPriceBenchmark
 from src.benchmarks.email import EmailBenchmark
 from src.benchmarks.insects import InsectsBenchmark
 
@@ -19,6 +20,7 @@ from src.benchmarks.insects import InsectsBenchmark
 _BENCHMARKS = {
     "regression": RegressionSwitchBenchmark,
     "gefcom": GefcomBenchmark,
+    "gefcom_price": GefcomPriceBenchmark,
     "email": EmailBenchmark,
     "insects": InsectsBenchmark,
 }
@@ -51,6 +53,7 @@ __all__ = [
     "StreamStep",
     "RegressionSwitchBenchmark",
     "GefcomBenchmark",
+    "GefcomPriceBenchmark",
     "EmailBenchmark",
     "InsectsBenchmark",
     "get_benchmark",

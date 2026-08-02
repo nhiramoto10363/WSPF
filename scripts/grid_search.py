@@ -72,6 +72,14 @@ def main():
         print("[gefcom: 選択区間から σ_obs を推定]")
         contexts, noise_by_zone = _gefcom_contexts(cfg)
         result["gefcom_noise"] = noise_by_zone
+    # GEFCom-Price: 単一ゾーン。選択区間から σ_obs を推定・保存する
+    # (estimate_obs_noise は zone=None でそのまま動く)。
+    elif cfg["benchmark"] == "gefcom_price":
+        print("[gefcom_price: 選択区間から σ_obs を推定]")
+        sigma = estimate_obs_noise(cfg)
+        print(f"  推定した σ_obs = {sigma:.4f}")
+        contexts = [{"noise_std": sigma}]
+        result["gefcom_price_noise"] = sigma
 
     # 粒子フィルタ: 既定は N=main のみ(主分析)。--tune-all-n で全 N(Supplement)。
     target_ns = n_sweep if args.tune_all_n else [n_main]

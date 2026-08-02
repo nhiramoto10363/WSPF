@@ -1,0 +1,58 @@
+# ======================================================================
+# GEFCom2014 Price ベンチマーク設定
+#   本文の大規模実データ結果 (Solar と相補ペア)。
+#   Solar=漸進的季節ドリフト・大 d、Price=急峻スパイク・確率評価が主・中庸 d。
+#   input 8, hidden 32 → param_dim = (8+1)*32 + (32+1) = 321 (条件2対応)。
+# ======================================================================
+benchmark: gefcom_price
+task_type: regression
+
+# --- データ ---
+data:
+  data_path: GEFCom2014/Price/price15.csv
+  select_end_ts: "2012-01-01"      # 選択区間=2011年通年 (D3, リーク除去 R1-13)
+  input_dim: 8                     # 負荷2 + ratio + hour/dow sin/cos + is_weekend
+  hidden_dim: 32                   # d = 321 (条件2: ρ ≲ O(1/√d) が Solar より緩む)
+  batch_size: 16
+  test_size: 32
+  noise_std: null                  # grid_search が選択区間から推定・保存
+  grad_clip_norm: 5.0
+  target_transform: asinh          # §4 D1: y' = asinh(price / s)
+  switch_points: []                # 人工的な切替点は設定しない
+
+# --- 手法 ---
+methods: [SGD, PH-SGD, Window-SGD, PF, WSPF-A, WSPF-B]
+oracle: false                      # Oracle は Regression のみ
+
+# --- 粒子数 (R2-2) ---
+n_particles:
+  main: 100
+  sweep: [25, 50, 100, 200, 400]
+
+# --- シード ---
+seeds:
+  selection: [1000, 1001, 1002]
+  evaluation: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+# --- グリッドサーチ範囲 (初版は Solar と同レンジ、端点警告で拡張) ---
+grid:
+  eta: [0.002, 0.005, 0.01, 0.05, 0.1, 0.2, 0.5, 1.0]
+  sigma_sys: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1]
+  prior_std: [0.01, 0.1, 0.25, 0.5, 0.75, 1.0]
+  beta: [0.8, 0.9, 0.95, 0.99]
+  # --- ベースライン固有HP (R2-4) ---
+  ph_delta: [0.005, 0.01]
+  ph_lambda: [2.0, 5.0]
+  ph_alpha: [0.9999]
+  window: [3, 5, 10]
+  n_passes: [1, 2]
+
+# --- 評価 ---
+eval:
+  monthly: true                    # 月別性能推移で報告
+  coverage_levels: [0.5, 0.8, 0.9, 0.95]
+  metrics: [mse, mae, nll, crps, coverage, width]   # Phase 3 で pinball 追加
+  # R2-1 stream-length スケーリング: 累積実行時間を報告
+  stream_length_checkpoints: [500, 1000, 2000, -1]  # -1 = 全ステップ
+
+output_dir: outputs/gefcom_price

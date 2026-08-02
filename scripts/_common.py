@@ -38,11 +38,12 @@ _BENCH_CLASSES = None
 
 def _bench_class(name):
     from src.benchmarks import (
-        RegressionSwitchBenchmark, GefcomBenchmark, EmailBenchmark,
-        InsectsBenchmark)
+        RegressionSwitchBenchmark, GefcomBenchmark, GefcomPriceBenchmark,
+        EmailBenchmark, InsectsBenchmark)
     return {
         "regression": RegressionSwitchBenchmark,
         "gefcom": GefcomBenchmark,
+        "gefcom_price": GefcomPriceBenchmark,
         "email": EmailBenchmark,
         "insects": InsectsBenchmark,
     }[name]
@@ -314,12 +315,23 @@ def get_params(selected, method, n_particles):
 def benchmark_contexts(cfg, selected):
     """ベンチマーク構築の override 辞書リストを返す(補助実験の共通化)。
 
-    GEFCom は全 zone をループし、grid_search が保存した zone 別観測ノイズ
-    (selected["gefcom_noise"])を必ず使う。未保存なら再現性のため例外にする
-    (デフォルト値へ黙ってフォールバックしない, M1)。他ベンチマークは [{}]。
-    各コンテキストには識別用に "zone" が入る(出力行の zone 列に使う)。
+    GEFCom-Solar は全 zone をループし、grid_search が保存した zone 別観測ノイズ
+    (selected["gefcom_noise"])を必ず使う。GEFCom-Price は単一ゾーンなので
+    単一コンテキスト [{"noise_std": selected["gefcom_price_noise"]}] を返す。
+    いずれも未保存なら再現性のため例外にする(デフォルト値へ黙ってフォールバック
+    しない, M1)。他ベンチマークは [{}]。GEFCom-Solar のコンテキストには識別用に
+    "zone" が入る(出力行の zone 列に使う)。
     """
-    if cfg["benchmark"] != "gefcom":
+    bench = cfg["benchmark"]
+    if bench == "gefcom_price":
+        noise = selected.get("gefcom_price_noise")
+        if noise is None:
+            raise KeyError(
+                "gefcom_price_noise が selected_params にありません。"
+                "先に scripts/grid_search.py --benchmark gefcom_price を"
+                "実行してください。")
+        return [{"noise_std": float(noise)}]
+    if bench != "gefcom":
         return [{}]
     noise = selected.get("gefcom_noise")
     if not noise:

@@ -10,10 +10,12 @@ ARFF / CSV を手動パースし、リークフリーな前処理 (PCA / 標準�
 
 from .email_loader import EmailDataLoader
 from .gefcom_solar_loader import GefcomSolarLoader
+from .gefcom_price_loader import GefcomPriceLoader
 from .insects_loader import InsectsDataLoader
 
 __all__ = [
     "EmailDataLoader",
     "GefcomSolarLoader",
+    "GefcomPriceLoader",
     "InsectsDataLoader",
 ]
