@@ -1,6 +1,6 @@
-python: 3.9.13 (main, Oct 19 2022, 17:23:07) 
-platform: Linux-4.18.0-372.32.1.el8_6.x86_64-x86_64-with-glibc2.28
-executable: /ap1/intel/oneapi/intelpython/python3.9/bin/python3
-numpy: 1.21.4
-scipy: 1.7.3
-numba: 0.55.1
+python: 3.11.15 | packaged by conda-forge | (main, Jun 11 2026, 03:34:02) [GCC 14.3.0]
+platform: Linux-7.0.0-28-generic-x86_64-with-glibc2.36
+executable: /workspace/.venv/bin/python3
+numpy: 2.2.6
+scipy: 1.17.1
+numba: 0.64.0

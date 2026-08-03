@@ -1,0 +1,419 @@
+# Stratified Learning-Rate WSPF 設計書 v1.0
+
+**対象**: WSPF-A / WSPF-B における学習率の粒子別層化配置
+**位置づけ**: 現行WSPF実装への増分改修。状態次元・勾配評価回数・ハイパーパラメータ探索次元をいずれも増やさない。
+
+---
+
+## 0. 要約
+
+現行WSPFは全粒子に共通のスカラー学習率 $\eta$ を用いる。これを、実行開始時に一度だけ層化生成した粒子スロット別の学習率 $\eta_1,\dots,\eta_N$ に置き換える。$\eta_i$ は粒子の**系譜には付随せず、スロット番号に固定**する。すなわちリサンプリング時に $\theta$・EMA・$\phi$ は祖先から複製するが、$\eta$ は複製しない。
+
+これにより、
+
+$$
+\text{高速スロットで新レジームへ移動}
+\;\longrightarrow\;
+\text{複製先の低速スロットで新レジーム付近に定着}
+$$
+
+という適応速度の系譜内切替が、粒子選択機構のみによって生じる。
+
+探索対象は従来と同じスカラー1個で、意味を「固定学習率 $\eta$」から「学習率分布の平均 $\bar\eta$」に読み替える。
+
+---
+
+# 第I部 理論
+
+## 1. 動機：単一学習率は必ず妥協になる
+
+新レジームでの局所損失を $L(\theta)=\tfrac12 h(\theta-\theta^\star)^2$、誤差を $e_t=\theta_t-\theta^\star$、確率勾配を $\widehat g_t = h e_t + \xi_t$（$\mathbb E[\xi_t]=0$, $\operatorname{Var}(\xi_t)=\sigma_g^2$）とする。1回のSGD更新後の誤差は
+
+$$
+e_t^{+} = (1-\eta h)e_t - \eta\xi_t,
+\qquad
+\mathbb E\!\left[(e_t^{+})^2 \mid e_t,\eta\right]
+= (1-\eta h)^2 e_t^2 + \eta^2\sigma_g^2 .
+$$
+
+これを最小化する学習率は
+
+$$
+\eta^\star(e_t) = \frac{h\,e_t^2}{h^2 e_t^2 + \sigma_g^2},
+\qquad
+\begin{cases}
+|e_t| \gg \sigma_g/h &\Rightarrow\ \eta^\star \approx 1/h,\\[2pt]
+|e_t| \ll \sigma_g/h &\Rightarrow\ \eta^\star \approx 0 .
+\end{cases}
+$$
+
+**最適学習率は現在の誤差量に依存する**。レジーム切替直後は大きな $\eta$、収束後は小さな $\eta$ が有利であり、固定 $\eta$ はこの二つの regime を一つの値で妥協するほかない。Window-SGD も同様に、単一軌道である限りこの妥協から逃れられない。
+
+粒子フィルタはこの問題に対して構造的な利点を持つ。同一時刻に複数の適応速度の候補を同時に生成し、**どれが適切かを尤度と重みに決定させる**ことができる。現行WSPFは全粒子が同一速度で同一の最適値へ向かうため、この利点を使っていない。層化学習率はその未使用の自由度を回収する改修である。
+
+## 2. 記法
+
+- 粒子数 $N$、パラメータ次元 $d$、ミニバッチサイズ $B$、時刻 $t$ のバッチ $B_t$
+- 粒子 $\theta_t^{(i)}\in\mathbb R^d$、正規化重み $w_t^{(i)}$、祖先インデックス $a_i$
+- ミニバッチ勾配 $\widehat g_t^{(i)}$、その標本共分散に関する量 $\widehat\Sigma_t^{(i)}$（WSPF-A）、スカラー要約 $\widehat s_t^{(i)}$（WSPF-B）
+- システムノイズ $\varepsilon_t^{(i)}\sim\mathcal N(0,\sigma_{\mathrm{sys}}^2 I)$、$Q_{\mathrm{cd}}=\sigma_{\mathrm{sys}}^2 I$
+
+現行WSPFの提案分布は
+
+$$
+q_\eta\!\left(\theta_t \mid \theta_{t-1}^{a_i}, B_t\right)
+= \mathcal N\!\left(\theta_{t-1}^{a_i} - \eta\,\widehat g_t^{(i)},\ \widehat V_p\right),
+\qquad
+\widehat V_p = \eta^2\widehat\Sigma + Q_{\mathrm{cd}},
+$$
+
+であり、WSPF の中心的主張は、この提案がミニバッチ経由で観測依存になっているため、prior $p(\theta_t\mid\theta_{t-1})=\mathcal N(\theta_{t-1},Q_{\mathrm{cd}})$ との比による重要度補正が必要だという点にある。
+
+## 3. 層化学習率の定義
+
+### 3.1 分布
+
+Gamma分布の形状母数を $\alpha=1$ に固定する。すなわち指数分布
+
+$$
+\eta \sim \operatorname{Gamma}(\alpha=1,\ \text{scale}=\bar\eta) = \operatorname{Exp}(\text{mean}=\bar\eta).
+$$
+
+$\alpha=1$ を固定する理由:
+
+- 正値のみを取る
+- 0近傍に低速粒子を十分に配置できる
+- 高速側に長い裾を持つ
+- 逆CDFが閉形式（外部依存なし）
+- **探索すべき分布パラメータが平均 $\bar\eta$ ただ一つになる**
+
+$\alpha$ は主実験では探索しない。必要なら Supplement で $\alpha\in\{0.5,1,2,\infty\}$ の感度分析を行い、$\alpha=\infty$ を従来の固定学習率に対応させる。
+
+### 3.2 層化配置
+
+学習率は実行開始時に一度だけ決定的に生成する。
+
+$$
+u_i = \frac{i+\tfrac12}{N}\ \ (i=0,\dots,N-1),
+\qquad
+r_i = -\log(1-u_i),
+\qquad
+\eta_i = \bar\eta\,\frac{r_{\pi(i)}}{\frac1N\sum_j r_j}.
+$$
+
+正規化により有限粒子でも $\frac1N\sum_i \eta_i = \bar\eta$ が厳密に成立する。$\pi$ は初期化時に一度だけ引くランダム置換で、以降固定する。
+
+**置換が必要な理由**: 現行の systematic resampling は祖先インデックスが単調になる実装のため、同一祖先の子孫は連続したスロットに配置される。$\eta_i$ を昇順のままスロットに割り当てると、祖先と学習率帯が不必要に相関し、fast→slow の再配分が阻害される。
+
+$N=100$ のとき倍率の範囲は概ね $[0.005,\ 5.30]$ となる。
+
+### 3.3 なぜ状態変数にしないのか
+
+$\eta$ を粒子状態に含め系譜で継承させると、一度 fast 群が優勢になった後に slow 群が絶滅し、以降の適応速度多様性が失われる。継承したいのは「どのパラメータ領域・レジーム仮説にいるか」であって「前回たまたま速く動いたか」ではない。
+
+スロット固定方式では、fast スロットの粒子が複製されると、その子孫は slow / medium / fast の各スロットへ配分される。継承されるのは
+
+$$
+\boxed{\text{高速更新によって到達した良いパラメータ状態}}
+$$
+
+のみであり、更新速度は毎回引き直される。これが本設計の要点である。
+
+## 4. 状態空間モデル上の位置づけ【最重要の設計判断】
+
+$\eta_i$ を提案分布にのみ入れるか、prior にも入れるかで、目標分布と挙動が変わる。両案を明示し、既定値を定める。
+
+### 案P1（既定）: 共通prior、提案分布のみ層化
+
+prior は現行のまま $p(\theta_t\mid\theta_{t-1}) = \mathcal N(\theta_{t-1}, Q_{\mathrm{cd}})$ とし、$\eta_i$ は提案分布にのみ入る。重みは
+
+$$
+\widetilde w_t^{(i)} \propto w_{t-1}^{a_i}\,
+p\!\left(B_t \mid \theta_t^{(i)}\right)
+\frac{p\!\left(\theta_t^{(i)} \mid \theta_{t-1}^{a_i}\right)}
+{q_{\eta_i}\!\left(\theta_t^{(i)} \mid \theta_{t-1}^{a_i}, B_t\right)} .
+$$
+
+粒子ごとに異なる提案分布を用い、その粒子自身の提案密度で割る構成は標準的な SMC として妥当であり、**目標分布は現行WSPFと厳密に同一**である。したがって論文の理論節（prior–proposal mismatch の同定と補正）はそのまま流用でき、追加の正当化を要しない。
+
+*帰結として注意すべき点*: prior が大きなパラメータ移動を強く罰する設定になっている場合、fast 粒子は移動量に比例した prior penalty を受ける。尤度利得がこれを上回らなければ、fast 粒子は生成されても常に消滅する。これは**バグではなく設計上の帰結**であり、実験で確認すべき第一の項目である（§9 の診断量）。
+
+### 案P2（待機）: スロット別prior、混合遷移
+
+fast 粒子が常に消滅する場合にのみ検討する。遷移モデル自体を適応速度の混合として定義する。
+
+$$
+p_H(\theta_t\mid\theta_{t-1}) = \int p_\eta(\theta_t\mid\theta_{t-1})\,dH_{\bar\eta}(\eta)
+\ \approx\ \frac1N\sum_{j=1}^{N} p_{\eta_j}(\theta_t\mid\theta_{t-1}).
+$$
+
+この混合 prior は $O(N^2)$ の Gaussian 評価に見えるが、$Q_{\mathrm{cd}}$ が等方的なら、$\delta = \theta_t^{(i)}-\theta_{t-1}^{a_i}$ に対して
+
+$$
+\left\|\delta + \eta_j \widehat g\right\|^2
+= \|\delta\|^2 + 2\eta_j\,\delta^\top \widehat g + \eta_j^2\|\widehat g\|^2
+$$
+
+と分解されるため、粒子ごとに $\|\delta\|^2,\ \delta^\top\widehat g,\ \|\widehat g\|^2$ を一度計算すれば混合全体を $O(N)$ のスカラー演算で評価できる。$N=100$ で総計 $10^4$ 演算に過ぎず、計算上の障害はない。
+
+ただしP2は**目標分布を変更する**ため、論文側に「遷移モデルを適応速度の混合とする」という新しい正当化が必要になる。最初の実装では採用しない。
+
+### 判断基準
+
+P1 で実行し、レジーム切替直後に高速スロットの重み質量 $M_{\mathrm{fast},t}$ が有意に上昇するなら P1 を維持する。切替直後でも高速スロットの質量が上昇しない（補正項に常に潰される）場合に限り、P2 または jump 遷移を検討する。
+
+## 5. リサンプリング規則
+
+リサンプリング直前の粒子集合を $\{\theta_t^{(i)}, w_t^{(i)}, \eta_i\}_{i=1}^N$、祖先インデックスを $a_i$ とする。
+
+$$
+\theta_t^{(i)} \leftarrow \theta_t^{(a_i)},
+\qquad
+m_t^{(i)} \leftarrow m_t^{(a_i)}\ \text{(WSPF-A の EMA)},
+\qquad
+\boxed{\ \eta_i \leftarrow \eta_i\ }
+$$
+
+$\phi$ も従来どおり祖先から複製する。$\eta$ のみ添字付けしない。
+
+**制約**: この fast→slow 切替は**リサンプリング時にのみ**起こる。ESS が高くリサンプリングが発動しない期間は、各粒子は同一スロットの学習率を使い続ける。したがって「切替後、最初のリサンプリングまでの時間」を必ず記録する。リサンプリング頻度が低すぎて機構が働かない場合の次段階の選択肢は、(a) ESS 閾値の変更、(b) 毎時刻のスロット再配置、(c) 一定周期の学習率再割当て。初期実装では現行の ESS 条件付きリサンプリングを維持する。
+
+## 6. 主張の書き方
+
+「slow 粒子が過学習を防ぐ」という断定は避ける。同一バッチで提案生成と尤度評価を行うため、現在バッチに強く適合した fast 粒子は**その時刻には高い重みを得る**。安定化が生じるのは後続バッチを含む逐次選択によってである。論文では次の表現を用いる。
+
+> Resampling followed by learning-rate reassignment allows rapidly adapted lineages to transition into conservative updates, reducing persistent high-step-size variance.
+
+同様に「Window-SGD には不可能」も過剰である。査読者は複数学習率のSGDアンサンブルや複数窓幅のWindow-SGDアンサンブルを容易にベースライン化でき、それらも混合予測分布を表現できる。主張は次のように限定する。
+
+> Unlike a single-trajectory Window-SGD, WSPF maintains an importance-weighted distribution over adaptation time scales, updating the probability of each hypothesis from the sequential likelihood.
+
+また、重み付き学習率分布は適応速度の選択挙動を表す診断量であって、「最適学習率の事後分布」ではない。$H_{\bar\eta}$ は遷移／提案カーネルの**設計分布**であり、推定対象ではない。
+
+## 7. この設計が解決しないこと
+
+- **パラメータ多様性そのもの**は保証されない。リサンプリング後に同一祖先が大量複製されると、異なる学習率を割り当てても粒子は同じ勾配方向上に並ぶだけになりうる。全方向の多様性には引き続き $Q_{\mathrm{cd}}$ と勾配ノイズが必要である。
+- **重み分散の増加**リスクがある。提案品質が粒子間で不均一になるため、定常期に ESS が低下する可能性がある。ESS 時系列を固定学習率版と比較する。
+
+---
+
+# 第II部 実装仕様
+
+## 8. 変更内容
+
+### 8.1 学習率生成（`src/filters/base.py` に新規追加）
+
+```python
+def make_stratified_learning_rates(n_particles, eta_mean, seed=None):
+    u = (np.arange(n_particles) + 0.5) / n_particles
+    multipliers = -np.log1p(-u)
+    multipliers /= multipliers.mean()          # 平均を厳密に 1 に
+    eta_rng = np.random.default_rng(seed)
+    perm = eta_rng.permutation(n_particles)    # 祖先-学習率相関の除去
+    return eta_mean * multipliers[perm]
+```
+
+`eta_rng` は粒子初期化・システムノイズ用の `self.rng` から**分離する**。既存の乱数列を変えないことで、固定学習率版との対照実験が同一シードで成立する。
+
+### 8.2 コンストラクタ
+
+```python
+def __init__(self, n_particles, param_dim,
+             eta=0.05,                 # 新定義: eta_mean
+             sigma_sys=0.02, ...,
+             eta_scheme="stratified_exp",
+             eta_seed=None):
+    self.eta_mean = float(eta)
+    self.eta_scheme = eta_scheme
+    if eta_scheme == "fixed":
+        self.eta_slots = np.full(self.N, self.eta_mean)
+    elif eta_scheme == "stratified_exp":
+        self.eta_slots = make_stratified_learning_rates(
+            self.N, self.eta_mean, eta_seed)
+    else:
+        raise ValueError(f"unknown eta_scheme: {eta_scheme}")
+```
+
+`eta_scheme="fixed"` は従来法の再現・アブレーション・数値テストのために残す。主実験では `stratified_exp` を使用し、`eta_scheme` 自体は探索しない。
+
+### 8.3 WSPF-B
+
+更新式:
+
+```python
+eta = self.eta_slots[:, None]                  # (N, 1)
+self.particles = self.particles - eta * g_hat + epsilon
+```
+
+補正項は要素別化するのみ:
+
+$$
+\rho_i = \frac{\eta_i^2 \widehat s_i}{\eta_i^2 \widehat s_i + \sigma_{\mathrm{sys}}^2}
+$$
+
+```python
+def compute_correction_method_b(epsilon, eta, s_bar, sigma_sys_sq, d):
+    eta = np.asarray(eta, dtype=np.float64)    # float でも (N,) でも可
+    eta_sq = eta ** 2
+    rho_raw = eta_sq * s_bar_safe / (eta_sq * s_bar_safe + sigma_sys_sq)
+    ...
+```
+
+スカラー入力も broadcast で通るようにし、固定学習率版との互換性を保つ。
+
+### 8.4 WSPF-A
+
+粒子別に
+
+$$
+\alpha_i = \frac{\eta_i^2}{B(B-1)}
+$$
+
+とし、Woodbury 計算を broadcast 化する。
+
+```python
+eta   = np.asarray(eta, dtype=np.float64)      # (N,)
+alpha = eta ** 2 / (B * (B - 1))               # (N,)
+
+v = epsilon - eta[:, None] * xi_hat            # (N, d)
+
+G = alpha[:, None, None] * np.einsum("nbd,ncd->nbc", deviations, deviations)
+p = np.sqrt(alpha)[:, None] * np.einsum("nbd,nd->nb", deviations, v)
+
+rho = eta ** 2 * s_bar / (eta ** 2 * s_bar + sigma_sys_sq)
+```
+
+$\Delta\mu$ および更新式にも各粒子自身の $\eta_i$ を用いる。
+
+**計算量は実質不変**。スカラーの broadcast が粒子別ベクトルの broadcast に変わるだけであり、支配項である勾配計算と $B\times B$ Cholesky は従来と同じ。
+
+## 9. 診断量
+
+重み更新後・リサンプリング前に記録する。
+
+| 量 | 定義 | 期待挙動 |
+|---|---|---|
+| 重み付き平均学習率 | $\bar\eta_t^{(w)}=\sum_i w_t^{(i)}\eta_i$ | 定常期に低下、switch直後に急上昇、追従後に低下 |
+| 重み付き標準偏差 | $s_{\eta,t}^{(w)}=\bigl[\sum_i w_t^{(i)}(\eta_i-\bar\eta_t^{(w)})^2\bigr]^{1/2}$ | switch直後に拡大 |
+| slow質量 | $M_{\mathrm{slow},t}=\sum_{i:\eta_i<0.5\bar\eta} w_t^{(i)}$ | 新レジーム到達後に増加 |
+| fast質量 | $M_{\mathrm{fast},t}=\sum_{i:\eta_i>1.5\bar\eta} w_t^{(i)}$ | switch直後に増加 |
+| MAP粒子の学習率 | $\eta_{\arg\max_i w_t^{(i)}}$ | switch直後に高速側へ |
+| fast→slow移行率 | $R_{F\to S,t}=\frac1N\sum_i \mathbf 1\!\left[\eta_{a_i}>1.5\bar\eta,\ \eta_i<0.5\bar\eta\right]$ | switch後のリサンプリング時に上昇 |
+| switch後初回リサンプリングまでの時間 | — | §5 の制約の確認用 |
+| ESS時系列 | — | 固定学習率版との比較 |
+
+$\bar\eta_t^{(w)}$ の時系列が「定常期に低く、switch直後に急上昇し、追従後に低下する」鋸歯状パターンを示せば、単なるハイパーパラメータのランダム化ではなく
+
+$$
+\boxed{\text{粒子選択によるオンライン適応速度制御}}
+$$
+
+が実際に起きていることを直接示せる。これが本改修の中心的な図である。
+
+補助図として、固定した代表点 $x^\star$ における重み付き予測分布 $\{f(x^\star;\theta_t^{(i)}),\,w_t^{(i)}\}$ の時系列を描くと、旧レジーム側の質量減衰と新レジーム側の形成が直接観察できる。
+
+## 10. 評価指標の変更【必須】
+
+現行の runner は粒子予測を平均と分散に集約し、
+
+$$
+\mathcal N\!\left(\bar f,\ \operatorname{Var}_w(f)+\sigma_{\mathrm{obs}}^2\right)
+$$
+
+という単一Gaussianとして NLL・CRPS を計算している。粒子分布が非対称・多峰的でも平均と分散だけに潰しているため、**学習率分布によって作った粒子分布を評価時に再び単一Gaussianへ潰すことになる**。本改修を主張するには、混合予測分布を評価に統合しなければならない。
+
+$$
+-\log\!\left[\sum_i w_t^{(i)}\,\mathcal N\!\left(y;\, f(x;\theta_t^{(i)}),\ \sigma_{\mathrm{obs}}^2\right)\right]
+$$
+
+という真の mixture NLL は既に別スクリプトに実装があるが、保存済み予測に粒子別予測が含まれないため再実行が必要な構造になっている。runner 側へ統合する。
+
+主指標: mixture NLL / mixture CRPS / PIT / mixture prediction interval coverage
+副指標: MSE（点予測性能）
+
+## 11. ハイパーパラメータ探索
+
+### 探索次元は増やさない
+
+現行グリッドは WSPF-A が $\eta \times \sigma_{\mathrm{sys}} \times \mathrm{prior\_std} \times \beta$、WSPF-B が $\eta \times \sigma_{\mathrm{sys}} \times \mathrm{prior\_std}$。直積構造はそのままで、$\eta \to \bar\eta$ と意味のみを変更する。
+
+```yaml
+grid:
+  eta_wspf_mean: [...]
+```
+
+```python
+etas_wspf = grid.get("eta_wspf_mean", grid["eta"])
+```
+
+これは軸の追加ではなく、Window-SGD等の固定学習率グリッドと WSPF の平均学習率グリッドで**範囲を分ける**ための措置である。
+
+### グリッド範囲の変換
+
+$N=100$ の指数分布中点配置では最大倍率が約 $5.30$ となるため、旧固定学習率グリッドをそのまま平均として使うと最速スロットが過大になる（Regression 最大 $0.5 \to 2.65$、INSECTS 最大 $3.0 \to 15.9$）。
+
+指数分布の90%分位点が $q_{0.9}=-\log(0.1)=2.303$ であることを使い、
+
+$$
+\bar\eta = \frac{\eta_{\mathrm{fixed}}}{2.303}
+$$
+
+とすれば、約90%のスロットが旧固定学習率以下に収まる。この変換で既存グリッドから `eta_wspf_mean` を機械的に生成する。
+
+## 12. 変更ファイル一覧
+
+| ファイル | 変更 |
+|---|---|
+| `src/filters/base.py` | `make_stratified_learning_rates()` 追加 |
+| `src/filters/wspf_a.py` | 粒子別 $\eta_i$、Woodbury補正の broadcast 化、診断量追加 |
+| `src/filters/wspf_b.py` | 粒子別 $\eta_i$、補正の要素別化、診断量追加 |
+| `src/evaluation/runner.py` | `eta_scheme`・`eta_seed` 受渡し、mixture指標統合、粒子別予測の保存 |
+| `src/evaluation/metrics.py` | mixture NLL・mixture CRPS・mixture CDF 追加 |
+| `scripts/_common.py` | `eta_wspf_mean` を1軸として使用 |
+| `configs/*.yaml` | WSPF用平均学習率グリッド追加 |
+| `tests/test_stratified_eta.py` | 新規 |
+| `tests/test_lowrank_correction.py` | 粒子別 $\eta$ 対応 |
+
+## 13. テスト
+
+1. `eta_scheme="fixed"` で旧実装と数値一致
+2. $\frac1N\sum_i \eta_i = \bar\eta$（厳密）
+3. 全 $\eta_i > 0$
+4. 同一 `eta_seed` で同一配置（再現性）
+5. リサンプリング後も `eta_slots` 自体は不変
+6. 同一祖先の複製が複数の学習率帯へ配置される
+7. WSPF-B のベクトル補正が、粒子ごとのスカラー計算と一致
+8. WSPF-A のベクトル Woodbury 補正が、粒子ごとの旧関数呼出しと一致
+9. 全 $\eta_i=\bar\eta$ とした場合に旧 WSPF-A/B を再現
+10. `rho`・補正項・重みがすべて有限
+11. $N$ スイープで平均学習率が変化しない
+12. mixture NLL が直接計算と一致
+
+## 14. 最終仕様
+
+$$
+\boxed{
+\begin{aligned}
+u_i &= \frac{i+\tfrac12}{N}, \qquad i=0,\dots,N-1,\\[4pt]
+\eta_i &= \bar\eta\,\frac{-\log(1-u_{\pi(i)})}{N^{-1}\sum_j -\log(1-u_j)},
+\qquad \pi:\text{初期化時に一度だけ引く固定置換},\\[4pt]
+\theta_t^{(i)} &= \theta_{t-1}^{a_i} - \eta_i\,\widehat g_t^{(i)} + \varepsilon_t^{(i)},\\[4pt]
+\widetilde w_t^{(i)} &\propto w_{t-1}^{a_i}\,p\!\left(B_t\mid\theta_t^{(i)}\right)
+\frac{p\!\left(\theta_t^{(i)}\mid\theta_{t-1}^{a_i}\right)}
+{q_{\eta_i}\!\left(\theta_t^{(i)}\mid\theta_{t-1}^{a_i},B_t\right)} .
+\end{aligned}}
+$$
+
+- 探索するのは $\bar\eta$ のみ
+- Gamma shape は $\alpha=1$ に固定
+- $\eta_i$ は初期化時に一度だけ生成し、粒子スロット番号に固定
+- リサンプリング時に $\eta_i$ は複製しない
+- WSPF-A/B の補正には各粒子自身の $\eta_i$ を使用
+- 固定学習率版はアブレーションとして保持
+
+## 15. 未決事項
+
+1. **prior の扱い（§4）**: P1 を既定とし、$M_{\mathrm{fast},t}$ が switch 直後にも上昇しない場合に限り P2 を検討する。この判断は最初の実験で決着させる。
+2. **リサンプリング頻度（§5）**: fast→slow 移行が十分な回数生じるか。$R_{F\to S,t}$ と switch 後初回リサンプリングまでの時間で確認する。
+3. **重み分散**: 提案品質の不均一化による ESS 低下が定常期に生じないか。
+4. **$s_{\max}$ の実効的な上限**: NN では極端な学習率が発散を招く。$N$ が大きいと最大倍率も増えるため（中点配置では $\approx\log(2N)$）、必要なら $\eta_i$ に上限クリップを設ける。ただしクリップは平均の厳密一致を壊すため、導入する場合は正規化をクリップ後に行う。
