@@ -1,0 +1,26 @@
+\begin{table}[htbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Classification streams: per-seed means with standard deviations in parentheses, over the ten evaluation seeds.}
+\label{tab:s3c_classification_levels}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+Benchmark & Method & $F_1$ & Accuracy & NLL \\
+\midrule
+Email & PF & 0.7937 (0.0025) & 0.8244 (0.0028) & 0.3805 (0.0032) \\
+ & WSPF-A & 0.7704 (0.0148) & 0.8082 (0.0116) & 0.4313 (0.0180) \\
+ & WSPF-B & 0.8158 (0.0073) & 0.8491 (0.0065) & 0.3500 (0.0070) \\
+ & SGD & 0.7883 (0.0053) & 0.8194 (0.0044) & 0.3851 (0.0062) \\
+ & PH-SGD & 0.7750 (0.0294) & 0.8126 (0.0165) & 0.3968 (0.0239) \\
+ & Window-SGD & 0.7920 (0.0057) & 0.8221 (0.0055) & 0.5362 (0.0122) \\
+\midrule
+INSECTS & PF & 0.4983 ($9.75\times 10^{-4}$) & 0.7718 (0.0011) & 0.5558 (0.0019) \\
+ & WSPF-A & 0.5000 ($9.66\times 10^{-4}$) & 0.7742 ($6.11\times 10^{-4}$) & 0.5490 (0.0014) \\
+ & WSPF-B & 0.5002 (0.0013) & 0.7743 ($8.91\times 10^{-4}$) & 0.5488 (0.0011) \\
+ & SGD & 0.4994 (0.0010) & 0.7737 (0.0011) & 0.5487 (0.0013) \\
+ & PH-SGD & 0.4852 (0.0010) & 0.7595 (0.0011) & 0.6010 (0.0028) \\
+ & Window-SGD & 0.4988 (0.0012) & 0.7662 (0.0010) & 0.5896 (0.0021) \\
+\bottomrule
+\end{tabular}
+\end{table}

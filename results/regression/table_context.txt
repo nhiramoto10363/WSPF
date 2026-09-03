@@ -1,0 +1,8 @@
+method      source                            mse_mean  mse_std    nll_mean  nll_std   nll_mixture_mean  nll_mixture_std
+PF          main                              0.356126  0.0757117  0.927737  0.147616  0.928015          0.147601       
+WSPF-B      main                              0.375048  0.0879859  0.955969  0.167257  0.957046          0.167652       
+WSPF-A      main                              0.351474  0.0765791  0.918092  0.147823  0.91855           0.14809        
+Oracle      oracle (no clipping; shared HPs)  0.311585  0.0344128  None      None      None              None           
+SGD         main                              0.40896   0.136233   1.04371   0.272465  1.04371           0.272465       
+Window-SGD  main                              0.343429  0.0672085  0.912649  0.134417  0.912649          0.134417       
+PH-SGD      main                              0.410908  0.0781142  1.04761   0.156228  1.04761           0.156228       

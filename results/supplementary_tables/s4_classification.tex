@@ -1,0 +1,26 @@
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\caption{Breakdown of the classification metrics, aggregated exactly as in the main text: computed on each test block, averaged over blocks within a seed, then averaged over the ten seeds. Blocks straddling a drift point are excluded. Email uses the positive class; INSECTS uses the macro average over the six classes. Standard deviations across seeds in parentheses. The $F_1$ column reproduces Table~5 of the main text.}
+\label{tab:s4_classification}
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+Benchmark & Method & Precision & Recall & $F_1$ & Bal.\ acc. & Accuracy \\
+\midrule
+Email & PF & 0.8201 (0.0044) & 0.8034 (0.0016) & 0.7937 (0.0027) & 0.8098 (0.0026) & 0.8244 (0.0028) \\
+ & WSPF-A & 0.8016 (0.0136) & 0.7793 (0.0158) & 0.7704 (0.0155) & 0.7901 (0.0118) & 0.8082 (0.0116) \\
+ & WSPF-B & 0.8453 (0.0085) & 0.8224 (0.0063) & 0.8158 (0.0077) & 0.8339 (0.0062) & 0.8491 (0.0065) \\
+ & SGD & 0.8162 (0.0068) & 0.7973 (0.0089) & 0.7883 (0.0056) & 0.8046 (0.0055) & 0.8194 (0.0044) \\
+ & PH-SGD & 0.8099 (0.0168) & 0.7833 (0.0342) & 0.7750 (0.0310) & 0.7961 (0.0210) & 0.8126 (0.0165) \\
+ & Window-SGD & 0.8123 (0.0065) & 0.7920 (0.0073) & 0.7920 (0.0060) & 0.8064 (0.0066) & 0.8221 (0.0055) \\
+\midrule
+INSECTS & PF & 0.5141 (0.0010) & 0.5164 ($9.27\times 10^{-4}$) & 0.4983 (0.0010) & 0.5164 ($9.27\times 10^{-4}$) & 0.7718 (0.0011) \\
+ & WSPF-A & 0.5154 (0.0012) & 0.5184 ($8.42\times 10^{-4}$) & 0.5000 (0.0010) & 0.5184 ($8.42\times 10^{-4}$) & 0.7742 ($6.11\times 10^{-4}$) \\
+ & WSPF-B & 0.5159 (0.0019) & 0.5183 (0.0011) & 0.5002 (0.0014) & 0.5183 (0.0011) & 0.7743 ($8.91\times 10^{-4}$) \\
+ & SGD & 0.5150 (0.0012) & 0.5176 (0.0010) & 0.4994 (0.0011) & 0.5176 (0.0010) & 0.7737 (0.0011) \\
+ & PH-SGD & 0.5006 (0.0011) & 0.5041 (0.0013) & 0.4852 (0.0011) & 0.5041 (0.0013) & 0.7595 (0.0011) \\
+ & Window-SGD & 0.5141 (0.0014) & 0.5155 (0.0014) & 0.4988 (0.0013) & 0.5155 (0.0014) & 0.7662 (0.0010) \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,6 @@
+{
+  "benchmarks": [
+    "regression"
+  ],
+  "source": "outputs"
+}

@@ -1,0 +1,25 @@
+\begin{table}[htbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Class distribution within each regime. On the email stream the imposed label reversals make the positive share alternate between $1/3$ and $2/3$; on INSECTS every regime is exactly uniform, so the drift there is a change in $p(y \mid x)$ alone.}
+\label{tab:s4b_class_distribution}
+\begin{tabular}{@{}llrrll@{}}
+\toprule
+Benchmark & Regime & Samples & $n$ & Window & Class fractions \\
+\midrule
+Email & 1 & 0--300 & 300 & selection & 0.667, 0.333 \\
+ & 2 & 300--600 & 300 & selection & 0.333, 0.667 \\
+ & 3 & 600--900 & 300 & report & 0.667, 0.333 \\
+ & 4 & 900--1200 & 300 & report & 0.333, 0.667 \\
+ & 5 & 1200--1500 & 300 & report & 0.667, 0.333 \\
+\midrule
+INSECTS & 1 & 0--14352 & 14352 & selection & 0.167, 0.167, 0.167, 0.167, 0.167, 0.167 \\
+ & 2 & 14352--19500 & 5148 & selection & 0.167, 0.167, 0.167, 0.167, 0.167, 0.167 \\
+ & 3 & 19500--33240 & 13740 & mixed & 0.167, 0.167, 0.167, 0.167, 0.167, 0.167 \\
+ & 4 & 33240--38682 & 5442 & report & 0.167, 0.167, 0.167, 0.167, 0.167, 0.167 \\
+ & 5 & 38682--39510 & 828 & report & 0.167, 0.167, 0.167, 0.167, 0.167, 0.167 \\
+ & 6 & 39510--52848 & 13338 & report & 0.167, 0.167, 0.167, 0.167, 0.167, 0.167 \\
+\bottomrule
+\end{tabular}
+\end{table}

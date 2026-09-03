@@ -1,0 +1,12 @@
+method,metric,mean,std,mean_difference,std_difference,paired_t_p,wilcoxon_p,paired_t_p_holm,wilcoxon_p_holm,better,n_seeds
+PF,mse,0.326865,0.0347915,,,,,,,,
+Oracle,mse,0.311585,0.0344128,,,,,,,,
+WSPF-A,mse,0.321497,0.0369511,,,,,,,,
+WSPF-B,mse,0.325645,0.0356142,,,,,,,,
+PF_vs_Oracle,mse_paired,,,0.0152805,0.00216378,3.42584e-09,0.00195312,2.0555e-08,0.0117188,Oracle,10
+PF_vs_WSPF-A,mse_paired,,,0.00536826,0.00263064,0.000117707,0.00390625,0.000353122,0.0117188,WSPF-A,10
+PF_vs_WSPF-B,mse_paired,,,0.00121992,0.00296077,0.22494,0.275391,0.22494,0.275391,WSPF-B,10
+Oracle_vs_WSPF-A,mse_paired,,,-0.00991224,0.00361875,1.16658e-05,0.00195312,4.66632e-05,0.0117188,Oracle,10
+Oracle_vs_WSPF-B,mse_paired,,,-0.0140606,0.0030445,1.42244e-07,0.00195312,7.11219e-07,0.0117188,Oracle,10
+WSPF-A_vs_WSPF-B,mse_paired,,,-0.00414834,0.00351553,0.0046866,0.00976562,0.00937319,0.0195312,WSPF-A,10
+WSPF-A_minus_Oracle,gap,0.00991224,None,,,,,,,,

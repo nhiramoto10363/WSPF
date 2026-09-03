@@ -1,0 +1,51 @@
+# INSECTS (abrupt, balanced): real-world multiclass classification.
+# 33 real-valued features, 6 classes, ~52,848 samples (about 3,300 steps at
+# batch size 16). Known change points at samples
+# [14352, 19500, 33240, 38682, 39510]; verify the variant before running
+# (scripts/prepare_data.py does this).
+
+benchmark: insects
+task_type: classification
+
+data:
+  csv_path: data/INSECTS-abrupt_balanced_norm.csv
+  hidden_dim: 32                   # param_dim = (33+1)*32 + (32+1)*6 = 1286
+  batch_size: 16
+  test_size: 32
+  grad_clip_norm: 5.0
+  seed: 42
+  # Selection window ends here (in batch steps): the first 1,250 steps are
+  # ~20,000 samples and cover the first two switches. Standardization is fit
+  # on samples [0, 20000) only.
+  select_end_step: 1250
+
+methods: [SGD, PH-SGD, Window-SGD, PF, WSPF-A, WSPF-B]
+oracle: false
+
+n_particles:
+  main: 100
+  sweep: [25, 50, 100, 200, 400]
+
+# A single real stream, but the filters' randomness still depends on the seed.
+seeds:
+  selection: [1000, 1001, 1002]
+  evaluation: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+grid:
+  eta: [0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 3.0]
+  sigma_sys: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.15, 0.2]
+  prior_std: [0.01, 0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0]
+  beta: [0.8, 0.9, 0.95, 0.99]
+  ph_delta: [0.001, 0.005, 0.01, 0.05]
+  ph_lambda: [1.0, 2.0, 5.0, 10.0]
+  ph_alpha: [0.999, 0.9999, 0.99999]
+  window: [2, 3, 5, 10, 20]
+  n_passes: [1, 2, 3, 5]
+
+eval:
+  # The selection/reporting split follows data.select_end_step. Blocks whose
+  # test window crosses a switch are dropped from the aggregates.
+  metrics: [accuracy, macro_f1, nll, brier]
+  post_switch_lag: 10
+
+output_dir: outputs/insects

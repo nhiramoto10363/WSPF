@@ -1,0 +1,53 @@
+# Regression benchmark with regime switching (synthetic).
+# Main-text results; the only benchmark with a known data-generating process,
+# and therefore the only one where the oracle filter is defined.
+
+benchmark: regression
+task_type: regression
+
+data:
+  input_dim: 1
+  hidden_dim: 8            # param_dim = (1+1)*8 + (8+1)*1 = 25
+  T: 500
+  batch_size: 16
+  test_size: 200
+  noise_std: 0.5           # observation noise sigma_obs, used for y = f + eps
+  within_regime_drift: 0.0005
+  grad_clip_norm: 5.0
+  switch_points: [100, 200, 300, 400]
+
+methods: [SGD, PH-SGD, Window-SGD, PF, WSPF-A, WSPF-B]
+oracle: true
+
+n_particles:
+  main: 100
+  sweep: [25, 50, 100, 200, 400]   # the sweep fixes the HPs selected at N=100
+
+seeds:
+  selection: [1000, 1001, 1002]
+  evaluation: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+# Grids. Where the selected point landed on an edge, the axis was extended by
+# one step and the selection repeated.
+grid:
+  eta: [0.002, 0.005, 0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5]
+  sigma_sys: [0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2]
+  prior_std: [0.01, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0]
+  beta: [0.8, 0.9, 0.95, 0.99]     # WSPF-A only
+  # Baseline-specific HPs, searched under the same protocol as the filters.
+  ph_delta: [0.001, 0.005, 0.01, 0.05]
+  ph_lambda: [1.0, 2.0, 5.0, 10.0]
+  ph_alpha: [0.999, 0.9999, 0.99999]
+  window: [2, 3, 5, 10, 20]
+  n_passes: [1, 2, 3, 5]
+
+eval:
+  eval_start: 50           # reporting window starts here
+  # Selection window [select_start, select_end): centred on the first switch
+  # (t=100). Selecting on a stationary stretch alone under-selects eta.
+  select_start: 50
+  select_end: 150
+  post_switch_lag: 10
+  coverage_levels: [0.5, 0.8, 0.9, 0.95]
+
+output_dir: outputs/regression

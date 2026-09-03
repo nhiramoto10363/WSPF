@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Cost as the parameter dimension is varied on the regression benchmark.}
+\label{tab:s9b_dim_sweep}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Method & benchmark & hidden\_dim & param\_dim & t\_step\_ms & t\_correction\_ms & peak\_mem\_MB \\
+\midrule
+WSPF-A & regression & 8 & 25 & 4.46 & 2.64 & 3.62 \\
+WSPF-A & regression & 16 & 49 & 5.97 & 3.18 & 6.25 \\
+WSPF-A & regression & 32 & 97 & 8.83 & 4.26 & 11.5 \\
+WSPF-A & regression & 64 & 193 & 17.1 & 8.14 & 22 \\
+WSPF-B & regression & 8 & 25 & 2.35 & 0.504 & 3.59 \\
+WSPF-B & regression & 16 & 49 & 3.46 & 0.676 & 6.2 \\
+WSPF-B & regression & 32 & 97 & 5.73 & 1.04 & 11.4 \\
+WSPF-B & regression & 64 & 193 & 12.2 & 3.14 & 21.9 \\
+\bottomrule
+\end{tabular}
+\end{table}

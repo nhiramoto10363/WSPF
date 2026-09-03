@@ -1,0 +1,7 @@
+benchmark  regime  start  end   n_samples  region     class_0_count  class_0_frac  class_1_count  class_1_frac  class_names
+email      1       0      300   300        selection  200            0.666667      100            0.333333      0|1        
+email      2       300    600   300        selection  100            0.333333      200            0.666667                 
+email      3       600    900   300        report     200            0.666667      100            0.333333                 
+email      4       900    1200  300        report     100            0.333333      200            0.666667                 
+email      5       1200   1500  300        report     200            0.666667      100            0.333333                 
+email      all     0      1500  1500       mixed      800            0.533333      700            0.466667                 

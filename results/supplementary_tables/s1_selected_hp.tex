@@ -1,0 +1,33 @@
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Hyper-parameters selected by the common protocol for every method and benchmark. Blank entries do not apply to the method. $W$ and $K$ are the window width and the number of passes of Window-SGD; $\delta$, $\lambda$ and $\alpha$ are the drift tolerance, detection threshold and forgetting factor of PH-SGD.}
+\label{tab:s1_selected_hp}
+\begin{tabular}{@{}llrrrrrrrrr@{}}
+\toprule
+Benchmark & Method & $\eta$ & $\sigma_{\mathrm{cd}}$ & $\sigma_0$ & $\beta$ & $W$ & $K$ & $\delta$ & $\lambda$ & $\alpha$ \\
+\midrule
+Regression & PF & 0.05 & 0.05 & 0.1 & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & 0.05 & 0.05 & 0.75 & 0.95 & --- & --- & --- & --- & --- \\
+ & WSPF-B & 0.01 & 0.1 & 1 & --- & --- & --- & --- & --- & --- \\
+ & SGD & 0.05 & --- & 0.5 & --- & --- & --- & --- & --- & --- \\
+ & PH-SGD & 0.05 & --- & 0.5 & --- & --- & --- & 0.001 & 2 & 0.999 \\
+ & Window-SGD & 0.05 & --- & 0.3 & --- & 3 & 5 & --- & --- & --- \\
+\midrule
+Email & PF & 1.25 & 0.005 & 0.1 & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & 1.5 & 0.025 & 0.1 & 0.9 & --- & --- & --- & --- & --- \\
+ & WSPF-B & 1.5 & 0.001 & 0.1 & --- & --- & --- & --- & --- & --- \\
+ & SGD & 1.25 & --- & 0.1 & --- & --- & --- & --- & --- & --- \\
+ & PH-SGD & 1.25 & --- & 0.1 & --- & --- & --- & 0.001 & 2 & 0.999 \\
+ & Window-SGD & 0.7 & --- & 0.1 & --- & 2 & 5 & --- & --- & --- \\
+\midrule
+INSECTS & PF & 0.2 & 0.005 & 0.25 & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & 0.2 & 0.001 & 0.25 & 0.9 & --- & --- & --- & --- & --- \\
+ & WSPF-B & 0.2 & 0.001 & 0.25 & --- & --- & --- & --- & --- & --- \\
+ & SGD & 0.2 & --- & 0.25 & --- & --- & --- & --- & --- & --- \\
+ & PH-SGD & 0.2 & --- & 0.25 & --- & --- & --- & 0.05 & 1 & 0.999 \\
+ & Window-SGD & 0.05 & --- & 0.1 & --- & 5 & 2 & --- & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{table}

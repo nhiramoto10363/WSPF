@@ -1,0 +1,46 @@
+{\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}llrrrrrrrrrr@{}}
+\caption{Computational cost per online update at $N=100$: wall-clock time per step, the part of it spent in the correction, per-sample gradient evaluations, peak traced memory, and the static memory breakdown in MB.}\label{tab:s9_compute_cost}\\
+\toprule
+Benchmark & Method & Step (ms) & Correction (ms) & Grad.\ evals & Peak (MB) & EMA & Particles & Dev. & $B\times B$ & Solve & Static total \\
+\midrule
+\endfirsthead
+\multicolumn{12}{@{}l}{\emph{(continued)}} \\
+\toprule
+Benchmark & Method & Step (ms) & Correction (ms) & Grad.\ evals & Peak (MB) & EMA & Particles & Dev. & $B\times B$ & Solve & Static total \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Regression & PF & 1.55 & 0.0739 & 100 & --- & --- & --- & --- & --- & --- & --- \\
+ & PF & --- & --- & --- & --- & --- & --- & --- & --- & --- & --- \\
+ & PF & --- & --- & --- & 3.72 & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & 3.84 & 2.36 & 1.6e+03 & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & --- & --- & --- & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & --- & --- & --- & 3.84 & 0.02 & 0.02 & 0.32 & 0.205 & 0.32 & 0.885 \\
+ & WSPF-B & 1.89 & 0.392 & 1.6e+03 & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-B & --- & --- & --- & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-B & --- & --- & --- & 3.81 & --- & --- & --- & --- & --- & --- \\
+\midrule
+Email & PF & 11.7 & 1.62 & 100 & --- & --- & --- & --- & --- & --- & --- \\
+ & PF & --- & --- & --- & --- & --- & --- & --- & --- & --- & --- \\
+ & PF & --- & --- & --- & 4.61 & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & 46.5 & 31.7 & 1.6e+03 & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & --- & --- & --- & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & --- & --- & --- & 39.3 & 0.666 & 0.666 & 10.7 & 0.205 & 10.7 & 22.9 \\
+ & WSPF-B & 22.2 & 9.08 & 1.6e+03 & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-B & --- & --- & --- & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-B & --- & --- & --- & 34.7 & --- & --- & --- & --- & --- & --- \\
+\midrule
+INSECTS & PF & 19.1 & 2.41 & 100 & --- & --- & --- & --- & --- & --- & --- \\
+ & PF & --- & --- & --- & --- & --- & --- & --- & --- & --- & --- \\
+ & PF & --- & --- & --- & 6.99 & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & 69.2 & 45.9 & 1.6e+03 & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & --- & --- & --- & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-A & --- & --- & --- & 60.2 & 1.03 & 1.03 & 16.5 & 0.205 & 16.5 & 35.2 \\
+ & WSPF-B & 36.6 & 14.1 & 1.6e+03 & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-B & --- & --- & --- & --- & --- & --- & --- & --- & --- & --- \\
+ & WSPF-B & --- & --- & --- & 53.4 & --- & --- & --- & --- & --- & --- \\
+\end{longtable}
+}

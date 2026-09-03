@@ -1,0 +1,153 @@
+task            method      metric                        level  mean       std          mean_difference  std_difference  paired_t_p   paired_t_p_holm  wilcoxon_p  zone
+classification  SGD         brier                                0.313878   0.000582613                                                                                 
+classification  SGD         ece                                  0.02195    0.000974474                                                                                 
+classification  PH-SGD      brier                                0.332768   0.00109714                                                                                  
+classification  PH-SGD      ece                                  0.0133772  0.00132641                                                                                  
+classification  Window-SGD  brier                                0.329962   0.00102439                                                                                  
+classification  Window-SGD  ece                                  0.0593919  0.00138525                                                                                  
+classification  PF          brier                                0.317147   0.000689906                                                                                 
+classification  PF          ece                                  0.0267537  0.00120408                                                                                  
+classification  WSPF-A      brier                                0.314101   0.000492152                                                                                 
+classification  WSPF-A      ece                                  0.0207038  0.000591821                                                                                 
+classification  WSPF-B      brier                                0.313827   0.000471546                                                                                 
+classification  WSPF-B      ece                                  0.0215924  0.000828757                                                                                 
+classification  SGD         ece_diff_vs_PF                                               -0.00480373      0.00134631      2.02521e-06                                   
+classification  SGD         brier_diff_vs_PF                                             -0.0032688       0.000960372     3.00648e-06                                   
+classification  PH-SGD      ece_diff_vs_PF                                               -0.0133765       0.00132322      2.25471e-10                                   
+classification  PH-SGD      brier_diff_vs_PF                                             0.0156211        0.00147428      1.48197e-10                                   
+classification  Window-SGD  ece_diff_vs_PF                                               0.0326382        0.00205577      3.97174e-12                                   
+classification  Window-SGD  brier_diff_vs_PF                                             0.0128152        0.00139963      5.44898e-10                                   
+classification  WSPF-A      ece_diff_vs_PF                                               -0.00604994      0.00154211      9.08183e-07                                   
+classification  WSPF-A      brier_diff_vs_PF                                             -0.00304591      0.000958303     5.30935e-06                                   
+classification  WSPF-B      ece_diff_vs_PF                                               -0.00516135      0.00142222      1.75593e-06                                   
+classification  WSPF-B      brier_diff_vs_PF                                             -0.00331993      0.000591823     4.13769e-08                                   
+classification  SGD         recovery_acc                  lag_0  0.346875   0.0123691                                                                                   
+classification  SGD         recovery_acc                  lag_1  0.339583   0.01932                                                                                     
+classification  SGD         recovery_acc                  lag_2  0.419792   0.0147682                                                                                   
+classification  SGD         recovery_acc                  lag_3  0.514583   0.0320048                                                                                   
+classification  SGD         recovery_acc                  lag_4  0.484375   0.021974                                                                                    
+classification  SGD         recovery_acc                  lag_5  0.452083   0.0219493                                                                                   
+classification  SGD         recovery_acc                  lag_6  0.478125   0.0220725                                                                                   
+classification  SGD         recovery_acc                  lag_7  0.588542   0.015625                                                                                    
+classification  SGD         recovery_acc                  lag_8  0.641667   0.0284129                                                                                   
+classification  SGD         recovery_acc                  lag_9  0.625      0.0208333                                                                                   
+classification  PH-SGD      recovery_acc                  lag_0  0.279167   0.0173055                                                                                   
+classification  PH-SGD      recovery_acc                  lag_1  0.259375   0.0269427                                                                                   
+classification  PH-SGD      recovery_acc                  lag_2  0.305208   0.0213732                                                                                   
+classification  PH-SGD      recovery_acc                  lag_3  0.421875   0.0393221                                                                                   
+classification  PH-SGD      recovery_acc                  lag_4  0.398958   0.0369902                                                                                   
+classification  PH-SGD      recovery_acc                  lag_5  0.421875   0.0452256                                                                                   
+classification  PH-SGD      recovery_acc                  lag_6  0.4625     0.0480072                                                                                   
+classification  PH-SGD      recovery_acc                  lag_7  0.532292   0.0407317                                                                                   
+classification  PH-SGD      recovery_acc                  lag_8  0.558333   0.034296                                                                                    
+classification  PH-SGD      recovery_acc                  lag_9  0.582292   0.0417837                                                                                   
+classification  Window-SGD  recovery_acc                  lag_0  0.348958   0.0234085                                                                                   
+classification  Window-SGD  recovery_acc                  lag_1  0.317708   0.0295547                                                                                   
+classification  Window-SGD  recovery_acc                  lag_2  0.408333   0.0130104                                                                                   
+classification  Window-SGD  recovery_acc                  lag_3  0.5125     0.0262698                                                                                   
+classification  Window-SGD  recovery_acc                  lag_4  0.517708   0.0203325                                                                                   
+classification  Window-SGD  recovery_acc                  lag_5  0.53125    0.0279508                                                                                   
+classification  Window-SGD  recovery_acc                  lag_6  0.5375     0.0260208                                                                                   
+classification  Window-SGD  recovery_acc                  lag_7  0.635417   0.0208333                                                                                   
+classification  Window-SGD  recovery_acc                  lag_8  0.689583   0.0270833                                                                                   
+classification  Window-SGD  recovery_acc                  lag_9  0.666667   0.0279508                                                                                   
+classification  PF          recovery_acc                  lag_0  0.3375     0.0133398                                                                                   
+classification  PF          recovery_acc                  lag_1  0.351042   0.0192356                                                                                   
+classification  PF          recovery_acc                  lag_2  0.426042   0.0200098                                                                                   
+classification  PF          recovery_acc                  lag_3  0.544792   0.0192356                                                                                   
+classification  PF          recovery_acc                  lag_4  0.498958   0.0194599                                                                                   
+classification  PF          recovery_acc                  lag_5  0.46875    0.043948                                                                                    
+classification  PF          recovery_acc                  lag_6  0.485417   0.0260208                                                                                   
+classification  PF          recovery_acc                  lag_7  0.591667   0.0254303                                                                                   
+classification  PF          recovery_acc                  lag_8  0.671875   0.0169571                                                                                   
+classification  PF          recovery_acc                  lag_9  0.642708   0.021875                                                                                    
+classification  WSPF-A      recovery_acc                  lag_0  0.342708   0.0143205                                                                                   
+classification  WSPF-A      recovery_acc                  lag_1  0.34375    0.0203058                                                                                   
+classification  WSPF-A      recovery_acc                  lag_2  0.421875   0.015625                                                                                    
+classification  WSPF-A      recovery_acc                  lag_3  0.542708   0.0235011                                                                                   
+classification  WSPF-A      recovery_acc                  lag_4  0.489583   0.0287168                                                                                   
+classification  WSPF-A      recovery_acc                  lag_5  0.470833   0.0185171                                                                                   
+classification  WSPF-A      recovery_acc                  lag_6  0.472917   0.0306186                                                                                   
+classification  WSPF-A      recovery_acc                  lag_7  0.588542   0.019901                                                                                    
+classification  WSPF-A      recovery_acc                  lag_8  0.659375   0.0174615                                                                                   
+classification  WSPF-A      recovery_acc                  lag_9  0.634375   0.0317495                                                                                   
+classification  WSPF-B      recovery_acc                  lag_0  0.352083   0.0222439                                                                                   
+classification  WSPF-B      recovery_acc                  lag_1  0.35625    0.0201987                                                                                   
+classification  WSPF-B      recovery_acc                  lag_2  0.428125   0.0235011                                                                                   
+classification  WSPF-B      recovery_acc                  lag_3  0.533333   0.0236621                                                                                   
+classification  WSPF-B      recovery_acc                  lag_4  0.484375   0.0251946                                                                                   
+classification  WSPF-B      recovery_acc                  lag_5  0.466667   0.0217506                                                                                   
+classification  WSPF-B      recovery_acc                  lag_6  0.469792   0.0277365                                                                                   
+classification  WSPF-B      recovery_acc                  lag_7  0.586458   0.016171                                                                                    
+classification  WSPF-B      recovery_acc                  lag_8  0.64375    0.0201987                                                                                   
+classification  WSPF-B      recovery_acc                  lag_9  0.61875    0.0295363                                                                                   
+classification  SGD         recovery_acc_area_diff_vs_PF                                 -0.0128125       0.0104795       0.00517187                    0.015156        
+classification  PH-SGD      recovery_acc_area_diff_vs_PF                                 -0.0796875       0.0182648       3.66278e-07                   0.00195312      
+classification  Window-SGD  recovery_acc_area_diff_vs_PF                                 0.0146875        0.0155725       0.0197382                     0.0273438       
+classification  WSPF-A      recovery_acc_area_diff_vs_PF                                 -0.00520833      0.0141835       0.299209                      0.374259        
+classification  WSPF-B      recovery_acc_area_diff_vs_PF                                 -0.00791667      0.0138051       0.119475                      0.0839844       
+classification  SGD         recovery_f1                   lag_0  0.295332   0.01716                                                                                     
+classification  SGD         recovery_f1                   lag_1  0.280026   0.0234162                                                                                   
+classification  SGD         recovery_f1                   lag_2  0.322201   0.0129333                                                                                   
+classification  SGD         recovery_f1                   lag_3  0.44148    0.0264636                                                                                   
+classification  SGD         recovery_f1                   lag_4  0.412716   0.0228407                                                                                   
+classification  SGD         recovery_f1                   lag_5  0.380468   0.0188955                                                                                   
+classification  SGD         recovery_f1                   lag_6  0.352866   0.0220035                                                                                   
+classification  SGD         recovery_f1                   lag_7  0.463639   0.0178806                                                                                   
+classification  SGD         recovery_f1                   lag_8  0.550092   0.0349473                                                                                   
+classification  SGD         recovery_f1                   lag_9  0.527539   0.0248392                                                                                   
+classification  PH-SGD      recovery_f1                   lag_0  0.209664   0.0175102                                                                                   
+classification  PH-SGD      recovery_f1                   lag_1  0.200674   0.0255695                                                                                   
+classification  PH-SGD      recovery_f1                   lag_2  0.224963   0.0255673                                                                                   
+classification  PH-SGD      recovery_f1                   lag_3  0.337496   0.0467074                                                                                   
+classification  PH-SGD      recovery_f1                   lag_4  0.318834   0.03181                                                                                     
+classification  PH-SGD      recovery_f1                   lag_5  0.338197   0.0452119                                                                                   
+classification  PH-SGD      recovery_f1                   lag_6  0.348811   0.0495816                                                                                   
+classification  PH-SGD      recovery_f1                   lag_7  0.42107    0.0367608                                                                                   
+classification  PH-SGD      recovery_f1                   lag_8  0.457155   0.0308871                                                                                   
+classification  PH-SGD      recovery_f1                   lag_9  0.463705   0.0461825                                                                                   
+classification  Window-SGD  recovery_f1                   lag_0  0.262843   0.0251523                                                                                   
+classification  Window-SGD  recovery_f1                   lag_1  0.254789   0.0293591                                                                                   
+classification  Window-SGD  recovery_f1                   lag_2  0.329115   0.0318563                                                                                   
+classification  Window-SGD  recovery_f1                   lag_3  0.436972   0.0246082                                                                                   
+classification  Window-SGD  recovery_f1                   lag_4  0.444963   0.025183                                                                                    
+classification  Window-SGD  recovery_f1                   lag_5  0.445188   0.0254847                                                                                   
+classification  Window-SGD  recovery_f1                   lag_6  0.407241   0.0249847                                                                                   
+classification  Window-SGD  recovery_f1                   lag_7  0.531973   0.0247873                                                                                   
+classification  Window-SGD  recovery_f1                   lag_8  0.598105   0.0229613                                                                                   
+classification  Window-SGD  recovery_f1                   lag_9  0.576599   0.0265414                                                                                   
+classification  PF          recovery_f1                   lag_0  0.286303   0.0184299                                                                                   
+classification  PF          recovery_f1                   lag_1  0.295168   0.0215905                                                                                   
+classification  PF          recovery_f1                   lag_2  0.331493   0.022985                                                                                    
+classification  PF          recovery_f1                   lag_3  0.461282   0.0109987                                                                                   
+classification  PF          recovery_f1                   lag_4  0.422678   0.0165778                                                                                   
+classification  PF          recovery_f1                   lag_5  0.394088   0.0377098                                                                                   
+classification  PF          recovery_f1                   lag_6  0.368907   0.0259779                                                                                   
+classification  PF          recovery_f1                   lag_7  0.482381   0.0256858                                                                                   
+classification  PF          recovery_f1                   lag_8  0.57995    0.0209345                                                                                   
+classification  PF          recovery_f1                   lag_9  0.548082   0.0200322                                                                                   
+classification  WSPF-A      recovery_f1                   lag_0  0.291712   0.0212243                                                                                   
+classification  WSPF-A      recovery_f1                   lag_1  0.288637   0.0169283                                                                                   
+classification  WSPF-A      recovery_f1                   lag_2  0.330935   0.0231829                                                                                   
+classification  WSPF-A      recovery_f1                   lag_3  0.457144   0.0212911                                                                                   
+classification  WSPF-A      recovery_f1                   lag_4  0.402538   0.0327074                                                                                   
+classification  WSPF-A      recovery_f1                   lag_5  0.392642   0.0171682                                                                                   
+classification  WSPF-A      recovery_f1                   lag_6  0.343797   0.0232731                                                                                   
+classification  WSPF-A      recovery_f1                   lag_7  0.475656   0.0194116                                                                                   
+classification  WSPF-A      recovery_f1                   lag_8  0.564798   0.0218658                                                                                   
+classification  WSPF-A      recovery_f1                   lag_9  0.538322   0.0250565                                                                                   
+classification  WSPF-B      recovery_f1                   lag_0  0.297443   0.0196389                                                                                   
+classification  WSPF-B      recovery_f1                   lag_1  0.301755   0.0204134                                                                                   
+classification  WSPF-B      recovery_f1                   lag_2  0.337063   0.0346879                                                                                   
+classification  WSPF-B      recovery_f1                   lag_3  0.456369   0.0154709                                                                                   
+classification  WSPF-B      recovery_f1                   lag_4  0.405148   0.0283526                                                                                   
+classification  WSPF-B      recovery_f1                   lag_5  0.391323   0.0213751                                                                                   
+classification  WSPF-B      recovery_f1                   lag_6  0.347066   0.0230967                                                                                   
+classification  WSPF-B      recovery_f1                   lag_7  0.47772    0.0154408                                                                                   
+classification  WSPF-B      recovery_f1                   lag_8  0.55258    0.0200442                                                                                   
+classification  WSPF-B      recovery_f1                   lag_9  0.52449    0.0259075                                                                                   
+classification  SGD         recovery_f1_area_diff_vs_PF                                  -0.014397        0.0147672       0.0168993                     0.0195312       
+classification  PH-SGD      recovery_f1_area_diff_vs_PF                                  -0.0849764       0.0149099       3.60157e-08                   0.00195312      
+classification  Window-SGD  recovery_f1_area_diff_vs_PF                                  0.0117456        0.0137422       0.0304799                     0.0644531       
+classification  WSPF-A      recovery_f1_area_diff_vs_PF                                  -0.00841491      0.0122348       0.0691035                     0.0488281       
+classification  WSPF-B      recovery_f1_area_diff_vs_PF                                  -0.00793744      0.0131376       0.10332                       0.0839844       

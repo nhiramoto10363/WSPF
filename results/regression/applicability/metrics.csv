@@ -1,0 +1,3 @@
+benchmark,method,d,N,rho_mean,rho_sd,sd_loglik,sd_loglik_sd,sd_logR_theory,sd_logR_theory_sd,sd_logR_measured,sd_logR_measured_sd,R_diag,R_diag_sd,R_diag_measured,required_N,rho_max_supported,condition_holds,n_seeds
+regression,WSPF-A,25,100,0.0777533,0.00701635,1.15947,0.15775,0.2749,0.0248065,1.27337,0.040447,0.23902,0.019358,1.11494,1.03885,0.858386,10/10,10
+regression,WSPF-B,25,100,0.00133924,0.000307005,5.03294,0.6682,0.00473495,0.00108543,0.00716971,0.0030446,0.000928965,9.99493e-05,0.0013752,1.00001,0.858386,10/10,10

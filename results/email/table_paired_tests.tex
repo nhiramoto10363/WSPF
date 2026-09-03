@@ -1,0 +1,51 @@
+\begin{tabular}{llllllllllllllll}
+\hline
+experiment & method & N & zone & kind & metric & mean & std & n\_seeds & mean\_difference & std\_difference & paired\_t\_p & wilcoxon\_p & paired\_t\_p\_holm & wilcoxon\_p\_holm & better \\
+\hline
+main & SGD\_vs\_PH-SGD & 100 & None & paired & f1\_paired &  &  & 10 & 0.0133921 & 0.0284215 & 0.170398 & 0.179712 & 0.681592 & 0.71885 & SGD \\
+main & SGD\_vs\_Window-SGD & 100 & None & paired & f1\_paired &  &  & 10 & -0.00361015 & 0.00936443 & 0.253788 & 0.232422 & 0.761363 & 0.71885 & Window-SGD \\
+main & SGD\_vs\_PF & 100 & None & paired & f1\_paired &  &  & 10 & -0.00534573 & 0.00716141 & 0.0425647 & 0.0273438 & 0.297953 & 0.191406 & PF \\
+main & SGD\_vs\_WSPF-A & 100 & None & paired & f1\_paired &  &  & 10 & 0.0179701 & 0.01474 & 0.00387501 & 0.00585938 & 0.0310001 & 0.046875 & SGD \\
+main & SGD\_vs\_WSPF-B & 100 & None & paired & f1\_paired &  &  & 10 & -0.0274196 & 0.00935894 & 6.73108e-06 & 0.00195312 & 0.000100966 & 0.0292969 & WSPF-B \\
+main & PH-SGD\_vs\_Window-SGD & 100 & None & paired & f1\_paired &  &  & 10 & -0.0170022 & 0.0302653 & 0.109382 & 0.105469 & 0.563512 & 0.527344 & Window-SGD \\
+main & PH-SGD\_vs\_PF & 100 & None & paired & f1\_paired &  &  & 10 & -0.0187378 & 0.0316438 & 0.0939186 & 0.0273438 & 0.563512 & 0.191406 & PF \\
+main & PH-SGD\_vs\_WSPF-A & 100 & None & paired & f1\_paired &  &  & 10 & 0.00457802 & 0.027171 & 0.607069 & 0.431641 & 0.761363 & 0.863281 & PH-SGD \\
+main & PH-SGD\_vs\_WSPF-B & 100 & None & paired & f1\_paired &  &  & 10 & -0.0408117 & 0.0302992 & 0.00211289 & 0.00195312 & 0.0211289 & 0.0292969 & WSPF-B \\
+main & Window-SGD\_vs\_PF & 100 & None & paired & f1\_paired &  &  & 10 & -0.00173558 & 0.00576765 & 0.366164 & 0.431641 & 0.761363 & 0.863281 & PF \\
+main & Window-SGD\_vs\_WSPF-A & 100 & None & paired & f1\_paired &  &  & 10 & 0.0215802 & 0.0166113 & 0.00264404 & 0.00390625 & 0.0237964 & 0.0390625 & Window-SGD \\
+main & Window-SGD\_vs\_WSPF-B & 100 & None & paired & f1\_paired &  &  & 10 & -0.0238094 & 0.00948638 & 2.358e-05 & 0.00195312 & 0.00028296 & 0.0292969 & WSPF-B \\
+main & PF\_vs\_WSPF-A & 100 & None & paired & f1\_paired &  &  & 10 & 0.0233158 & 0.0154953 & 0.00103213 & 0.00390625 & 0.0113534 & 0.0390625 & PF \\
+main & PF\_vs\_WSPF-B & 100 & None & paired & f1\_paired &  &  & 10 & -0.0220739 & 0.00860375 & 1.97816e-05 & 0.00195312 & 0.000257161 & 0.0292969 & WSPF-B \\
+main & WSPF-A\_vs\_WSPF-B & 100 & None & paired & f1\_paired &  &  & 10 & -0.0453897 & 0.0156331 & 7.2494e-06 & 0.00195312 & 0.000101492 & 0.0292969 & WSPF-B \\
+main & SGD\_vs\_PH-SGD & 100 & None & paired & nll\_paired &  &  & 10 & -0.0116986 & 0.0246903 & 0.168276 & 0.179712 & 0.193869 & 0.210938 & SGD \\
+main & SGD\_vs\_Window-SGD & 100 & None & paired & nll\_paired &  &  & 10 & -0.151043 & 0.0155606 & 2.02457e-10 & 0.00195312 & 2.63194e-09 & 0.0292969 & SGD \\
+main & SGD\_vs\_PF & 100 & None & paired & nll\_paired &  &  & 10 & 0.00468705 & 0.00773634 & 0.0876356 & 0.105469 & 0.193869 & 0.210938 & PF \\
+main & SGD\_vs\_WSPF-A & 100 & None & paired & nll\_paired &  &  & 10 & -0.0461693 & 0.0217178 & 8.62893e-05 & 0.00195312 & 0.000517736 & 0.0292969 & SGD \\
+main & SGD\_vs\_WSPF-B & 100 & None & paired & nll\_paired &  &  & 10 & 0.0350963 & 0.010077 & 1.59324e-06 & 0.00195312 & 1.43392e-05 & 0.0292969 & WSPF-B \\
+main & PH-SGD\_vs\_Window-SGD & 100 & None & paired & nll\_paired &  &  & 10 & -0.139344 & 0.0274799 & 6.31078e-08 & 0.00195312 & 7.57293e-07 & 0.0292969 & PH-SGD \\
+main & PH-SGD\_vs\_PF & 100 & None & paired & nll\_paired &  &  & 10 & 0.0163856 & 0.0246191 & 0.0646229 & 0.0488281 & 0.193869 & 0.146484 & PF \\
+main & PH-SGD\_vs\_WSPF-A & 100 & None & paired & nll\_paired &  &  & 10 & -0.0344708 & 0.0252871 & 0.00195957 & 0.00585938 & 0.0078383 & 0.0292969 & PH-SGD \\
+main & PH-SGD\_vs\_WSPF-B & 100 & None & paired & nll\_paired &  &  & 10 & 0.0467949 & 0.0254311 & 0.000253438 & 0.00195312 & 0.00126719 & 0.0292969 & WSPF-B \\
+main & Window-SGD\_vs\_PF & 100 & None & paired & nll\_paired &  &  & 10 & 0.15573 & 0.0112591 & 8.5259e-12 & 0.00195312 & 1.27889e-10 & 0.0292969 & PF \\
+main & Window-SGD\_vs\_WSPF-A & 100 & None & paired & nll\_paired &  &  & 10 & 0.104873 & 0.0255529 & 3.93852e-07 & 0.00195312 & 3.93852e-06 & 0.0292969 & WSPF-A \\
+main & Window-SGD\_vs\_WSPF-B & 100 & None & paired & nll\_paired &  &  & 10 & 0.186139 & 0.0184407 & 1.42796e-10 & 0.00195312 & 1.99914e-09 & 0.0292969 & WSPF-B \\
+main & PF\_vs\_WSPF-A & 100 & None & paired & nll\_paired &  &  & 10 & -0.0508564 & 0.0194653 & 1.70955e-05 & 0.00195312 & 0.000119669 & 0.0292969 & PF \\
+main & PF\_vs\_WSPF-B & 100 & None & paired & nll\_paired &  &  & 10 & 0.0304092 & 0.010238 & 6.0127e-06 & 0.00195312 & 4.81016e-05 & 0.0292969 & WSPF-B \\
+main & WSPF-A\_vs\_WSPF-B & 100 & None & paired & nll\_paired &  &  & 10 & 0.0812656 & 0.0185685 & 2.26515e-07 & 0.00195312 & 2.49166e-06 & 0.0292969 & WSPF-B \\
+main & SGD\_vs\_PH-SGD & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & -0.0116986 & 0.0246903 & 0.168276 & 0.179712 & 0.193869 & 0.210938 & SGD \\
+main & SGD\_vs\_Window-SGD & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & -0.151043 & 0.0155606 & 2.02457e-10 & 0.00195312 & 2.63194e-09 & 0.0292969 & SGD \\
+main & SGD\_vs\_PF & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & 0.00468705 & 0.00773634 & 0.0876356 & 0.105469 & 0.193869 & 0.210938 & PF \\
+main & SGD\_vs\_WSPF-A & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & -0.0461693 & 0.0217178 & 8.62893e-05 & 0.00195312 & 0.000517736 & 0.0292969 & SGD \\
+main & SGD\_vs\_WSPF-B & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & 0.0350963 & 0.010077 & 1.59324e-06 & 0.00195312 & 1.43392e-05 & 0.0292969 & WSPF-B \\
+main & PH-SGD\_vs\_Window-SGD & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & -0.139344 & 0.0274799 & 6.31078e-08 & 0.00195312 & 7.57293e-07 & 0.0292969 & PH-SGD \\
+main & PH-SGD\_vs\_PF & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & 0.0163856 & 0.0246191 & 0.0646229 & 0.0488281 & 0.193869 & 0.146484 & PF \\
+main & PH-SGD\_vs\_WSPF-A & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & -0.0344708 & 0.0252871 & 0.00195957 & 0.00585938 & 0.0078383 & 0.0292969 & PH-SGD \\
+main & PH-SGD\_vs\_WSPF-B & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & 0.0467949 & 0.0254311 & 0.000253438 & 0.00195312 & 0.00126719 & 0.0292969 & WSPF-B \\
+main & Window-SGD\_vs\_PF & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & 0.15573 & 0.0112591 & 8.5259e-12 & 0.00195312 & 1.27889e-10 & 0.0292969 & PF \\
+main & Window-SGD\_vs\_WSPF-A & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & 0.104873 & 0.0255529 & 3.93852e-07 & 0.00195312 & 3.93852e-06 & 0.0292969 & WSPF-A \\
+main & Window-SGD\_vs\_WSPF-B & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & 0.186139 & 0.0184407 & 1.42796e-10 & 0.00195312 & 1.99914e-09 & 0.0292969 & WSPF-B \\
+main & PF\_vs\_WSPF-A & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & -0.0508564 & 0.0194653 & 1.70955e-05 & 0.00195312 & 0.000119669 & 0.0292969 & PF \\
+main & PF\_vs\_WSPF-B & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & 0.0304092 & 0.010238 & 6.0127e-06 & 0.00195312 & 4.81016e-05 & 0.0292969 & WSPF-B \\
+main & WSPF-A\_vs\_WSPF-B & 100 & None & paired & nll\_mixture\_paired &  &  & 10 & 0.0812656 & 0.0185685 & 2.26515e-07 & 0.00195312 & 2.49166e-06 & 0.0292969 & WSPF-B \\
+\hline
+\end{tabular}

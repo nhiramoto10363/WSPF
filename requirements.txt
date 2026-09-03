@@ -1,0 +1,17 @@
+# The finalized results were produced with:
+#   Python 3.9.13 / numpy 1.21.4 / scipy 1.7.3 / numba 0.55.1
+# The lower bounds below reflect that environment; Python 3.11 with numpy 2.2
+# also works.
+#
+# numba is required (src/filters/base.py JITs resampling and ESS).
+# matplotlib is only needed for figures; tables and numbers work without it.
+# statsmodels is only used for the Holm correction, which falls back to an
+# equivalent internal implementation when it is absent.
+
+numpy>=1.21
+scipy>=1.7
+PyYAML>=5.4
+numba>=0.55
+matplotlib>=3.4    # optional (figures)
+statsmodels>=0.13  # optional (Holm correction)
+pytest>=7.0        # optional (tests)

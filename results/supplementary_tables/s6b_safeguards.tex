@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Numerical safeguards over the report window, averaged over the ten seeds with standard deviations in parentheses. ``Cond.'' is the condition number of the $B \times B$ system solved in Method~A, averaged and maximized over particles within a step. ``Jitter'' counts the particles whose Cholesky factorization failed and needed a diagonal jitter, ``Non-finite'' the non-finite log-corrections, and ``Clipped'' the activations of the Method~B safeguard $\rho \le 0.999$; all three are summed over the report window. Method~B forms no $B \times B$ system, so its condition-number entries are empty.}
+\label{tab:s6b_safeguards}
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+Benchmark & Method & Cond.\ mean & Cond.\ max & Jitter & Non-finite & Clipped \\
+\midrule
+Regression & WSPF-A & 1.48 (0.047) & 1.83 (0.1) & 0 (0) & 0 (0) & 0 (0) \\
+ & WSPF-B & --- & --- & --- & 0 (0) & 0 (0) \\
+\midrule
+Email & WSPF-A & 87.4 (8.2) & 95.4 (8.4) & 0 (0) & 0 (0) & 0 (0) \\
+ & WSPF-B & --- & --- & --- & 0 (0) & 210 (57) \\
+\midrule
+INSECTS & WSPF-A & 1.31e+03 (30) & 1.31e+03 (30) & 0 (0) & 0 (0) & 0 (0) \\
+ & WSPF-B & --- & --- & --- & 0 (0) & 0 (0) \\
+\bottomrule
+\end{tabular}
+\end{table}
