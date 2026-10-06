@@ -561,8 +561,11 @@ def _plot_reliability(reliability, out_dir):
             pass
 
 
-def _plot_email_recovery(curves, out_dir):
-    """Plot the classification recovery curves (optional)."""
+def _plot_classification_recovery(curves, out_dir, bench_name):
+    """Plot the classification recovery curves (optional).
+
+    Written as recovery_<benchmark>_<metric>.png (email or insects).
+    """
     if not (_HAVE_MPL and curves):
         return
     try:  # pragma: no cover - plotting is environment-dependent
@@ -581,11 +584,11 @@ def _plot_email_recovery(curves, out_dir):
                 ax.fill_between(lags, curve - std, curve + std, alpha=0.15)
             ax.set_xlabel("lag after switch (blocks)")
             ax.set_ylabel(f"report-region {metric_key}")
-            ax.set_title(f"Email post-switch recovery: {metric_key} "
+            ax.set_title(f"{bench_name} post-switch recovery: {metric_key} "
                          "(band = ±1 SD across seeds)")
             ax.legend(fontsize=8)
             fig.tight_layout()
-            fig.savefig(os.path.join(out_dir, f"recovery_email_{metric_key}.png"),
+            fig.savefig(os.path.join(out_dir, f"recovery_{bench_name}_{metric_key}.png"),
                         dpi=120)
             plt.close(fig)
     except Exception:  # noqa: BLE001
@@ -649,7 +652,7 @@ def main():
     # --- Figures (optional) ---
     _plot_recovery(curves, out_dir)
     _plot_reliability(reliability, out_dir)
-    _plot_email_recovery(email_curves, out_dir)
+    _plot_classification_recovery(email_curves, out_dir, bench_name)
     if not _HAVE_MPL:
         print("[note] matplotlib unavailable: PNGs skipped, CSV written")
 

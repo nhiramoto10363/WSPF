@@ -106,7 +106,7 @@ under the same structure. Tables are written as `.csv`, `.txt` and `.tex`.
 | Figure 3 | Regression MSE over time | `outputs/figures/regression_regime_switch_timeseries_N100.png` | `plot_mse_timeseries.py` |
 | Figure 4 | ESS against the number of particles | `outputs/figures/ess_sweep.png` | `plot_ess_sweep.py` |
 | Figure 5 | Switch-aligned recovery, regression | `outputs/regression/figures/recovery_post_switch.png` | `plot_recovery.py` |
-| Figure 6 | Switch-aligned recovery, elist | `outputs/figures/recovery_email_f1.png` | `plot_recovery_classification.py` |
+| Figure 6 | Switch-aligned recovery, elist | `outputs/figures/figure_email_switch_recovery.png` | `plot_recovery_classification.py` |
 
 Table 1 (notation), Table 4 (the elist label-reversal schedule) and Figure 1
 (a schematic) are not experimental output and have no generating script.
